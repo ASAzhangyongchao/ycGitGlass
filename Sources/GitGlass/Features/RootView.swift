@@ -16,9 +16,10 @@ struct RootView: View {
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
                 BrandHeader()
-                    .padding(.bottom, 12)
-                topBar
+                    .padding(.bottom, 10)
+                actionBar
                 tabBar
+                refreshFooter
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -43,78 +44,68 @@ struct RootView: View {
                 newBranchName = ""
             }
         }
-        // 启动只刷新一次；之后仅由手动按钮 / 切仓库 / 切分支 / 写操作触发。
+        .sheet(isPresented: Binding(
+            get: { state.showAbout },
+            set: { if !$0 { state.showAbout = false } }
+        )) {
+            AboutSheet()
+        }
+        // 启动只刷新一次；更新检查距上次 ≥24h 才静默做一次，同样不轮询。
         .task {
             await state.refresh(reason: .appLaunch)
+            await state.autoCheckForUpdatesIfNeeded()
         }
     }
 
-    // MARK: 顶栏
+    // MARK: 操作行（仓库/分支信息已并入品牌行，这里只留动作，不再重复两遍）
 
-    private var topBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(state.currentRepository?.name ?? "还没有仓库")
-                        .font(.system(size: 21, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                    HStack(spacing: 7) {
-                        Image(systemName: "arrow.triangle.branch").font(.system(size: 10))
-                        Text(state.status.branch.isEmpty ? "未选择分支" : state.status.branch)
-                            .font(.system(size: 11.5, weight: .medium))
-                        if state.status.ahead > 0 {
-                            StatusBadge(text: "领先 \(state.status.ahead)", tint: GlassPalette.mint)
-                        }
-                        if state.status.behind > 0 {
-                            StatusBadge(text: "落后 \(state.status.behind)", tint: GlassPalette.amber)
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                if state.isBusy {
-                    BusyBadge(label: state.busyLabel)
-                }
-
-                branchMenu
-                    .disabled(state.currentRepository == nil || state.isBusy)
-
-                ActionButton(title: "拉取", icon: "arrow.down") {
-                    Task { await state.pull() }
-                }
-                .disabled(state.currentRepository == nil || state.isBusy)
-                .help("用 fast-forward 拉取远程改动，避免多余合并提交")
-
-                ActionButton(title: "推送", icon: "arrow.up", prominent: true) {
-                    Task { await state.push() }
-                }
-                .disabled(state.currentRepository == nil || state.isBusy)
-
-                ActionButton(title: "刷新", icon: "arrow.clockwise") {
-                    Task { await state.refresh(reason: .manual) }
-                }
-                .disabled(state.isBusy)
-                .help("手动重新读取状态、分支、历史、远程源与密钥（⌘R）")
+    private var actionBar: some View {
+        HStack(spacing: 10) {
+            if state.isBusy {
+                BusyBadge(label: state.busyLabel)
             }
 
-            HStack(spacing: 6) {
-                Image(systemName: "bolt.horizontal.fill").font(.system(size: 9))
-                if let date = state.lastRefreshed {
-                    Text("上次刷新 \(date.formatted(.dateTime.hour().minute())) · \(state.lastRefreshReason)")
-                } else {
-                    Text("数据不会自动轮询，仅在你点刷新、切仓库、切分支或完成操作时更新")
-                }
-                Spacer()
-                Text("空闲零后台任务")
-                    .foregroundStyle(.tertiary)
+            Spacer(minLength: 8)
+
+            branchMenu
+                .disabled(state.currentRepository == nil || state.isBusy)
+
+            ActionButton(title: "拉取", icon: "arrow.down") {
+                Task { await state.pull() }
             }
-            .font(.system(size: 10.5))
-            .foregroundStyle(.secondary)
+            .disabled(state.currentRepository == nil || state.isBusy)
+            .help("用 fast-forward 拉取远程改动，避免多余合并提交")
+
+            ActionButton(title: "推送", icon: "arrow.up", prominent: true) {
+                Task { await state.push() }
+            }
+            .disabled(state.currentRepository == nil || state.isBusy)
+
+            ActionButton(title: "刷新", icon: "arrow.clockwise") {
+                Task { await state.refresh(reason: .manual) }
+            }
+            .disabled(state.isBusy)
+            .help("手动重新读取状态、分支、历史、远程源与密钥（⌘R）")
         }
         .padding(.top, 10)
-        .padding(.bottom, 12)
+        .padding(.bottom, 10)
+    }
+
+    private var refreshFooter: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "bolt.horizontal.fill").font(.system(size: 9))
+            if let date = state.lastRefreshed {
+                Text("上次刷新 \(date.formatted(.dateTime.hour().minute())) · \(state.lastRefreshReason)")
+            } else {
+                Text("数据不会自动轮询，仅在你点刷新、切仓库、切分支或完成操作时更新")
+            }
+            Spacer()
+            Text("空闲零后台任务")
+                .foregroundStyle(.tertiary)
+        }
+        .font(.system(size: 10.5))
+        .foregroundStyle(.secondary)
+        .padding(.leading, 2)
     }
 
     private var branchMenu: some View {
@@ -169,25 +160,25 @@ struct RootView: View {
     }
 
     private var tabButtons: some View {
-        HStack(spacing: 7) {
-            ForEach(AppTab.allCases, id: \.self) { tab in
-                let selected = state.selectedTab == tab
-                Button {
-                    withComfortableAnimation(reduceMotion) { state.selectedTab = tab }
-                } label: {
-                    Label(tab.rawValue, systemImage: tab.symbol)
-                        .font(.system(size: 12, weight: selected ? .semibold : .medium))
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 9)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(selected ? .primary : .secondary)
-                .glassPill(tint: selected ? GlassPalette.blue.opacity(0.20) : nil, interactive: true)
-                .glassIdentity(tab.rawValue, in: glassNamespace)
+        // 六个页签宽度自适应：窄窗口时自动换行到第二行，而不是硬挤压截断文字。
+        FlowLayout(spacing: 7, data: AppTab.allCases) { tab in
+            let selected = state.selectedTab == tab
+            Button {
+                withComfortableAnimation(reduceMotion) { state.selectedTab = tab }
+            } label: {
+                Label(tab.rawValue, systemImage: tab.symbol)
+                    .font(.system(size: 12, weight: selected ? .semibold : .medium))
+                    .fixedSize()
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .foregroundStyle(selected ? .primary : .secondary)
+            .glassPill(tint: selected ? GlassPalette.blue.opacity(0.20) : nil, interactive: true)
+            .glassIdentity(tab.rawValue, in: glassNamespace)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: 内容区

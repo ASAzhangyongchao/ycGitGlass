@@ -4,6 +4,20 @@ import Foundation
 public enum AppConfig {
     /// 面向用户的产品名；工程 / bundle 标识仍保持 GitGlass 以兼容已有配置目录。
     public static let appName = "码牛 MooGit"
+
+    /// 应用版本唯一来源（Info.plist / package.sh 需手动同步此处）。
+    public static let appVersion = "1.3.0"
+    public static let appBuild = "4"
+
+    // MARK: 仓库与更新源
+
+    public static let repoSlug = "ASAzhangyongchao/ycGitGlass"
+    public static var repoURL: URL { URL(string: "https://github.com/\(repoSlug)")! }
+    public static var releasesURL: URL { URL(string: "https://github.com/\(repoSlug)/releases/latest")! }
+    public static var issuesURL: URL { URL(string: "https://github.com/\(repoSlug)/issues/new/choose")! }
+    public static var updateAPIURL: URL {
+        URL(string: "https://api.github.com/repos/\(repoSlug)/releases/latest")!
+    }
     public static let bundleIdentifier = "com.gitglass.app"
     public static let logSubsystem = "com.gitglass.app"
     public static let configBlockBegin = "# >>> GitGlass managed >>>"

@@ -19,12 +19,14 @@ struct GitGlassApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("关于 码牛 MooGit") {
-                    NSApp.orderFrontStandardAboutPanel(nil)
+                    state.openAbout()
                 }
             }
             CommandMenu("Git") {
                 Button("手动刷新") { Task { await state.refresh(reason: .manual) } }
                     .keyboardShortcut("r", modifiers: [.command])
+                Button("检查更新…") { Task { await state.checkForUpdates() } }
+                    .keyboardShortcut("u", modifiers: [.command])
                 Button("拉取") { Task { await state.pull() } }
                     .keyboardShortcut("l", modifiers: [.command])
                 Button("推送") { Task { await state.push() } }
@@ -65,6 +67,8 @@ struct GitGlassApp: App {
                 .disabled(state.currentRepository == nil)
             Button("推送") { Task { await state.push() } }
                 .disabled(state.currentRepository == nil)
+            Divider()
+            Button("关于 / 检查更新") { state.openAbout() }
             Divider()
             Button("退出 码牛") { NSApp.terminate(nil) }
         }

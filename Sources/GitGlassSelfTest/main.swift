@@ -20,7 +20,7 @@ struct GitGlassSelfTest {
 
         func section(_ title: String) { print("\n▸ \(title)") }
 
-        print("码牛 MooGit 深度自检 v1.2.0")
+        print("码牛 MooGit 深度自检 v1.3.0")
 
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("gitglass-selftest-\(UUID().uuidString)")
@@ -455,6 +455,22 @@ struct GitGlassSelfTest {
                   && RefreshReason.afterMutation.rawValue == "操作完成")
             check("页面含储藏页", AppTab.allCases.contains(.stashes) && AppTab.allCases.count == 6)
             check("最后状态仍干净", try await git.status(at: repo.path).isClean)
+
+            // MARK: M 版本比较与更新信息
+            section("M · 版本比较 / 更新信息")
+            check("1.2.0 < 1.3.0", UpdateService.compareVersions("1.2.0", "1.3.0") < 0)
+            check("v1.3.0 > 1.2.9", UpdateService.compareVersions("v1.3.0", "1.2.9") > 0)
+            check("1.2 == 1.2.0", UpdateService.compareVersions("1.2", "1.2.0") == 0)
+            check("1.10.0 > 1.9.0（非字典序）", UpdateService.compareVersions("1.10.0", "1.9.0") > 0)
+            check("2.0.0-beta < 2.0.0", UpdateService.compareVersions("2.0.0-beta", "2.0.0") < 0)
+            check("非法段按 0 处理", UpdateService.compareVersions("1.x", "1.0.1") < 0)
+            let info = UpdateInfo(tag: "v1.4.0", name: "Release 1.4.0",
+                                  htmlURL: "https://example.com", publishedAt: "2026-11-11")
+            check("UpdateInfo 去 v 前缀", info.version == "1.4.0")
+            check("应用版本与配置一致", AppConfig.appVersion == "1.3.0")
+            check("更新源指向正式仓库", AppConfig.repoSlug == "ASAzhangyongchao/ycGitGlass"
+                  && AppConfig.updateAPIURL.absoluteString.contains("releases/latest"))
+            check("版本比较驱动更新判定", UpdateService.compareVersions(AppConfig.appVersion, info.version) < 0)
         } catch {
             failed += 1
             print("  ❌ 自检中断：\(error)")

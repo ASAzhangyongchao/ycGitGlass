@@ -45,6 +45,13 @@ public final class AppState {
     public var inProgressOperation: String?
     public var conflictedFiles: [String] = []
     public var showDetailPanel = false
+    public var showAbout = false
+    public var updateState: UpdateState = .idle
+    /// 上次自动检查更新的时间戳（UserDefaults 存储的秒数）。为保持零轮询，只有启动时距上次 ≥24h 才静默检查一次。
+    public var lastAutoUpdateCheck: Date?
+
+    private static let autoCheckInterval: TimeInterval = 24 * 3600
+    private static let lastCheckKey = "lastAutoUpdateCheck"
     public var isBusy = false
     public var busyLabel = ""
     public var errorMessage: String?
@@ -734,6 +741,64 @@ public final class AppState {
         save()
     }
 
+    // MARK: - 关于与更新
+
+    public func openAbout() {
+        showAbout = true
+    }
+
+    /// 手动检查更新（About 面板按钮触发）。
+    public func checkForUpdates() async {
+        updateState = .checking
+        await checkForUpdatesInternal(manual: true)
+    }
+
+    /// 启动时的静默检查：距上次自动检查不足 24 小时则直接跳过，绝不轮询。
+    public func autoCheckForUpdatesIfNeeded() async {
+        let last = UserDefaults.standard.double(forKey: Self.lastCheckKey)
+        let lastDate = last > 0 ? Date(timeIntervalSince1970: last) : nil
+        lastAutoUpdateCheck = lastDate
+        if let lastDate, Date().timeIntervalSince(lastDate) < Self.autoCheckInterval {
+            return
+        }
+        await checkForUpdatesInternal(manual: false)
+    }
+
+    private func checkForUpdatesInternal(manual: Bool) async {
+        let service = UpdateService()
+        do {
+            let info = try await service.latest()
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastCheckKey)
+            if let info {
+                let result = UpdateService.compareVersions(AppConfig.appVersion, info.version)
+                if result < 0 {
+                    updateState = .available(info)
+                    if manual { showAbout = true }
+                } else {
+                    updateState = .upToDate
+                }
+            } else {
+                updateState = .noReleasesYet
+            }
+        } catch {
+            // 静默检查失败不打扰用户；手动检查给出可读错误。
+            updateState = manual ? .failed("检查更新失败：网络不可用或 GitHub 无法访问")
+                                 : .idle
+        }
+    }
+
+    public func openReleasesPage() {
+        NSWorkspaceOpenURL(AppConfig.releasesURL)
+    }
+
+    public func openRepositoryPage() {
+        NSWorkspaceOpenURL(AppConfig.repoURL)
+    }
+
+    public func openIssuesPage() {
+        NSWorkspaceOpenURL(AppConfig.issuesURL)
+    }
+
     public func appendCommitPrefix(_ prefix: String) {
         let trimmed = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -803,4 +868,12 @@ public final class AppState {
         let cleaned = String(last).replacingOccurrences(of: ".git", with: "")
         return cleaned.isEmpty ? "repository" : cleaned
     }
+}
+
+/// Core 层不依赖 AppKit 的前提下打开外部链接：通过 Foundation 的 Process 调 open。
+private func NSWorkspaceOpenURL(_ url: URL) {
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    task.arguments = [url.absoluteString]
+    try? task.run()
 }

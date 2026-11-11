@@ -8,7 +8,10 @@ enum Brand {
     static let englishName = "MooGit"
     static let fullName = "码牛 MooGit"
     static let tagline = "轻量 Git 工作台 · 看清每一次改动"
-    static let version = "1.2.0"
+    static var version: String { AppConfig.appVersion }
+    static var repoSlug: String { AppConfig.repoSlug }
+    static var repoURL: URL { AppConfig.repoURL }
+    static var releasesURL: URL { AppConfig.releasesURL }
 
     /// .app bundle 里由 make-brand-assets.swift 生成；swift run 调试时回退到系统符号。
     static var headerImage: NSImage {
@@ -21,43 +24,50 @@ enum Brand {
     }
 }
 
-/// 窗口页头的玻璃品牌条：应用图标 + 名称 + 版本 + 当前仓库/分支。
+/// 窗口顶部紧凑品牌行：小 logo + 名称（点开「关于」）+ 当前仓库/分支胶囊 + 更新状态点。
+/// 上一版品牌条与顶栏重复显示「仓库名 + 分支」且把内容区压矮，这里收成单行。
 struct BrandHeader: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        HStack(spacing: 11) {
-            Image(nsImage: Brand.headerImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.white.opacity(0.55), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.16), radius: 7, x: 0, y: 3)
+        HStack(spacing: 10) {
+            Button {
+                state.openAbout()
+            } label: {
+                HStack(spacing: 9) {
+                    Image(nsImage: Brand.headerImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 30, height: 30)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.14), radius: 5, x: 0, y: 2)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 7) {
-                    Text(Brand.name)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                    Text(Brand.englishName)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    StatusBadge(text: "v\(Brand.version)", tint: GlassPalette.blue)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(Brand.name)
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                            Text(Brand.englishName)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(Brand.tagline)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
-                Text(Brand.tagline)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help("查看关于、版本与检查更新")
 
-            Spacer(minLength: 8)
-
-            if let repository = state.currentRepository {
+            if state.currentRepository != nil {
                 HStack(spacing: 6) {
                     Image(systemName: "folder.fill").font(.system(size: 9))
-                    Text(repository.name)
+                    Text(state.currentRepository?.name ?? "")
                         .font(.system(size: 11, weight: .medium))
                         .lineLimit(1)
                     Text("·").foregroundStyle(.tertiary)
@@ -65,16 +75,62 @@ struct BrandHeader: View {
                     Text(state.status.branch.isEmpty ? "—" : state.status.branch)
                         .font(.system(size: 11, design: .monospaced))
                         .lineLimit(1)
+                    if state.status.ahead + state.status.behind > 0 {
+                        Text("↑\(state.status.ahead) ↓\(state.status.behind)")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(GlassPalette.mint)
+                    }
                 }
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 11)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.leading, 14)
+                .padding(.trailing, 14)
                 .padding(.vertical, 6)
                 .glassPill()
             }
+
+            Spacer(minLength: 8)
+
+            updateBadge
+
+            SmallIconButton(icon: "info.circle", helpText: "关于 码牛 MooGit · 版本 · GitHub") {
+                state.openAbout()
+            }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .glassSurface(cornerRadius: 16, tint: GlassPalette.blue.opacity(0.07))
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 15, tint: GlassPalette.blue.opacity(0.07))
         .cardShadow()
+    }
+
+    /// 更新状态：有新版本时给出醒目入口；平时只留一个安静的刷新点。
+    @ViewBuilder
+    private var updateBadge: some View {
+        switch state.updateState {
+        case .available(let info):
+            Button {
+                state.openAbout()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .foregroundStyle(GlassPalette.mint)
+                    Text("新版本 \(info.version)")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+            }
+            .buttonStyle(.plain)
+            .glassPill(tint: GlassPalette.mint.opacity(0.16), interactive: true)
+            .help("有可用更新，点击查看")
+            .transition(.scale.combined(with: .opacity))
+        case .checking:
+            ProgressView()
+                .controlSize(.small)
+                .help("正在检查更新")
+        default:
+            EmptyView()
+        }
     }
 }
