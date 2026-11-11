@@ -331,6 +331,17 @@ public enum AppTab: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// 列表定位请求：驱动历史列表滚动到指定提交并闪烁高亮。
+public struct LocateRequest: Equatable, Sendable {
+    public var hash: String
+    /// 每次点击生成新 id，同一提交重复点击也能再次触发 onChange
+    public var id: UUID
+    public init(hash: String) {
+        self.hash = hash
+        self.id = UUID()
+    }
+}
+
 /// 唯一允许的刷新触发来源。刻意不包含 timer / 文件监听 / 应用前后台切换。
 public enum RefreshReason: String, Sendable {
     case appLaunch = "启动"

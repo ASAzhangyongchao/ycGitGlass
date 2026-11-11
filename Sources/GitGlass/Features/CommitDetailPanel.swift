@@ -171,6 +171,10 @@ struct CommitDetailPanel: View {
                 .help("生成一条反向提交，撤销这条提交的改动")
             }
             HStack(spacing: 7) {
+                ActionButton(title: "定位", icon: "target") {
+                    state.locateSelectedInList()
+                }
+                .help("在左侧列表中定位这条提交：滚动过去并高亮闪烁")
                 ActionButton(title: "打标签", icon: "tag") { showTagSheet = true }
                 ActionButton(title: "复制 hash", icon: "doc.on.doc") {
                     if let hash = state.selectedCommit?.hash {

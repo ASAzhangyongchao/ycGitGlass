@@ -54,6 +54,8 @@ public final class AppState {
     /// 历史/提交页的专属 Diff 查看器（第三栏）：点变更文件后打开
     public var showDiffViewer = false
     public var showAbout = false
+    /// 定位请求：详情面板「在列表中定位」按钮触发，历史列表滚动到该提交并闪烁高亮
+    public var locateRequest: LocateRequest?
     public var updateState: UpdateState = .idle
     /// 上次自动检查更新的时间戳（UserDefaults 存储的秒数）。为保持零轮询，只有启动时距上次 ≥24h 才静默检查一次。
     public var lastAutoUpdateCheck: Date?
@@ -748,6 +750,12 @@ public final class AppState {
             self.commitDetail = detail
             self.changedFilesOfSelection = detail.changedFiles.map(\.path)
         }
+    }
+
+    /// 在左侧列表中定位当前选中的提交（滚动 + 高亮闪烁）
+    public func locateSelectedInList() {
+        guard let commit = selectedCommit else { return }
+        locateRequest = LocateRequest(hash: commit.hash)
     }
 
     public func closeDetail() {

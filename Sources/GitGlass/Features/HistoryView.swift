@@ -6,6 +6,9 @@ import GitCore
 struct HistoryView: View {
     @Environment(AppState.self) private var state
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 定位闪烁状态：locateRequest 到来时滚动并高亮闪烁
+    @State private var flashHash: String?
+    @State private var flashOn = false
 
     var body: some View {
         if state.currentRepository == nil {
@@ -40,94 +43,78 @@ struct HistoryView: View {
     }
 
     private var searchBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 第一行：纯搜索（给输入框最大空间）
-            HStack(spacing: 9) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                TextField("搜索提交说明 / 作者 / hash，支持 author: file: since: 前缀", text: Binding(
-                    get: { state.historyQuery },
-                    set: { state.historyQuery = $0 }
-                ))
-                .textFieldStyle(.plain)
-                .font(.system(size: 12.5))
-                .onChange(of: state.historyQuery) { _, _ in state.historyQueryChanged() }
-
-                if !state.historyQuery.isEmpty {
-                    Button {
-                        withComfortableAnimation(reduceMotion) { state.historyQuery = "" }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("清空搜索")
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .glassSurface(cornerRadius: 12)
-
-            // 第二行：筛选工具条（作者/排序/范围/深搜 + 结果统计）
-            HStack(spacing: 7) {
-                authorMenu
-                sortMenu
-
-                Toggle("全部分支", isOn: Binding(
-                    get: { state.historyAllBranches },
-                    set: { state.historyAllBranches = $0 }
-                ))
-                .toggleStyle(.checkbox)
+        // 单行统一工具条：搜索 + 筛选 + 统计都在一条玻璃条里，
+        // 与右侧详情面板顶部对齐，不再三行割裂。
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
-                .onChange(of: state.historyAllBranches) { _, _ in
-                    Task { await state.refresh(reason: .manual) }
+                .foregroundStyle(.secondary)
+            TextField("搜索说明 / 作者 / hash…", text: Binding(
+                get: { state.historyQuery },
+                set: { state.historyQuery = $0 }
+            ))
+            .textFieldStyle(.plain)
+            .font(.system(size: 12.5))
+            .onChange(of: state.historyQuery) { _, _ in state.historyQueryChanged() }
+
+            if !state.historyQuery.isEmpty {
+                Button {
+                    withComfortableAnimation(reduceMotion) { state.historyQuery = "" }
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
+                .help("清空搜索")
+            }
 
-                Spacer(minLength: 8)
+            Divider().frame(height: 14).opacity(0.5)
 
-                Text("\(state.filteredCommits.count) / \(state.commits.count) 条")
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                    .help("筛选后 / 已加载的提交数")
+            authorMenu
+            sortMenu
 
-                ActionButton(title: "深度搜索", icon: "sparkle.magnifyingglass") {
+            Toggle("全部分支", isOn: Binding(
+                get: { state.historyAllBranches },
+                set: { state.historyAllBranches = $0 }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.system(size: 11))
+            .onChange(of: state.historyAllBranches) { _, _ in
+                Task { await state.refresh(reason: .manual) }
+            }
+
+            Spacer(minLength: 8)
+
+            if state.historyAuthorFilter != nil {
+                Button {
+                    if let author = state.historyAuthorFilter { state.toggleAuthorFilter(author) }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.fill")
+                        Text("清除作者筛选")
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(GlassPalette.violet)
+                }
+                .buttonStyle(.plain)
+                .help("取消作者筛选")
+            }
+
+            Text("\(state.filteredCommits.count)/\(state.commits.count)")
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .help("筛选后 / 已加载的提交数")
+
+            if state.needsDeepSearch {
+                ActionButton(title: "深度搜索", icon: "sparkle.magnifyingglass", prominent: true) {
                     Task { await state.deepSearch() }
                 }
                 .disabled(state.isBusy || state.historyQuery.isEmpty)
                 .help("扫描完整历史（按文件、日期范围搜索时需要）")
             }
-            .padding(.horizontal, 4)
-
-            // 第三行：状态说明（有筛选时才占位，避免空提示常驻）
-            HStack(spacing: 8) {
-                if let author = state.historyAuthorFilter {
-                    HStack(spacing: 5) {
-                        StatusBadge(text: "作者：\(author)", tint: GlassPalette.violet)
-                        Button("清除") { state.toggleAuthorFilter(author) }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 10))
-                            .foregroundStyle(GlassPalette.violet)
-                    }
-                }
-                if state.needsDeepSearch {
-                    Text("按文件 / 日期搜索需点「深度搜索」执行 git 查询")
-                        .font(.system(size: 10))
-                        .foregroundStyle(GlassPalette.violet.opacity(0.9))
-                } else if state.historyQuery.isEmpty && state.historyAuthorFilter == nil {
-                    Text("彩色轨道 = 分支 / 合并关系 · 输入即时过滤，零 git 命令")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
-                Spacer(minLength: 0)
-                HStack(spacing: 5) {
-                    ForEach(GlassPalette.lanes.prefix(4), id: \.self) { color in
-                        Circle().fill(color.opacity(0.85)).frame(width: 4.5, height: 4.5)
-                    }
-                }
-                .opacity(state.historyQuery.isEmpty && state.historyAuthorFilter == nil ? 1 : 0)
-            }
-            .padding(.horizontal, 4)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 12)
     }
 
     /// 行高与轨道列共用，保证节点与行内容严格对齐。
@@ -222,20 +209,40 @@ struct HistoryView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 180)
         } else {
-            ScrollView {
-                HStack(alignment: .top, spacing: 0) {
-                    // 连续轨道背景层：一张 Canvas 画整列，线条跨行贯通
-                    CommitGraphColumn(commits: state.filteredCommits,
-                                      rowHeight: Self.rowHeight)
-                        .padding(.top, 4)
-                    // 行内容层：固定行高与轨道对齐
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(state.filteredCommits.enumerated()), id: \.element.id) { index, commit in
-                            commitRow(commit)
-                                .staggered(index)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    HStack(alignment: .top, spacing: 0) {
+                        // 连续轨道背景层：一张 Canvas 画整列，线条跨行贯通
+                        CommitGraphColumn(commits: state.filteredCommits,
+                                          rowHeight: Self.rowHeight)
+                            .padding(.top, 4)
+                        // 行内容层：固定行高与轨道对齐
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(state.filteredCommits.enumerated()), id: \.element.id) { index, commit in
+                                commitRow(commit)
+                                    .id(commit.hash)
+                                    .staggered(index)
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
+                }
+                .onChange(of: state.locateRequest) { _, request in
+                    guard let request else { return }
+                    withAnimation(reduceMotion ? nil : Motion.snappy) {
+                        proxy.scrollTo(request.hash, anchor: .center)
+                    }
+                    flashHash = request.hash
+                    flashOn = true
+                    // 闪烁两轮后熄灭（事件驱动，无 Timer）
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(240)); flashOn = false
+                        try? await Task.sleep(for: .milliseconds(240)); flashOn = true
+                        try? await Task.sleep(for: .milliseconds(240)); flashOn = false
+                        try? await Task.sleep(for: .milliseconds(240)); flashOn = true
+                        try? await Task.sleep(for: .milliseconds(300)); flashOn = false
+                        flashHash = nil
+                    }
                 }
             }
         }
@@ -277,10 +284,19 @@ struct HistoryView: View {
             .frame(minHeight: Self.rowHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .background(
-                selected ? GlassPalette.accent.opacity(0.10) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
+            .background {
+                let flashing = flashHash == commit.hash && flashOn
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(flashing
+                          ? GlassPalette.accent.opacity(0.30)
+                          : (selected ? GlassPalette.accent.opacity(0.10) : Color.clear))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(GlassPalette.accent.opacity(flashing ? 0.75 : 0),
+                                          lineWidth: 1.5)
+                    )
+            }
+            .animation(reduceMotion ? nil : Motion.snappy, value: flashOn)
         }
         .buttonStyle(.plain)
         .animation(Motion.snappy, value: selected)
