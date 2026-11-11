@@ -155,14 +155,14 @@
   <h2><em>01</em> 安装与迁移</h2>
   <h3>直接在 Apple Silicon Mac 安装</h3>
   <ol>
-    <li>解压 <code>GitGlass-1.2.0-macOS26.zip</code>，把 <code>GitGlass.app</code> 拖进「应用程序」。</li>
+    <li>解压 <code>GitGlass-1.3.0-macOS26.zip</code>，把 <code>GitGlass.app</code> 拖进「应用程序」。</li>
     <li>若提示「无法验证开发者」，执行 <code>xattr -cr /Applications/GitGlass.app</code>，或右键 → 「打开」。</li>
     <li>运行 <code>open /Applications/GitGlass.app</code>。</li>
   </ol>
   <div class="note warn">现成 .app 是 arm64 架构、ad-hoc 本地签名。仅装 Command Line Tools 的环境无法构建通用二进制（缺 XCBuild.framework），所以 Intel Mac 请走源码重建。</div>
 
   <h3>在另一台 Mac 从源码构建</h3>
-  <pre><code>cd GitGlass-1.2.0-macOS26
+  <pre><code>cd GitGlass-1.3.0-macOS26
 xcode-select --install          # 已有 Xcode 26 可跳过
 chmod +x scripts/build-app.sh
 ./scripts/build-app.sh          # 自动编译当前机器架构
