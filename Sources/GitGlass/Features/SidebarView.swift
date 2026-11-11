@@ -5,10 +5,25 @@ import GitCore
 struct SidebarView: View {
     @Environment(AppState.self) private var state
     @State private var showCloneSheet = false
+    @State private var query = ""
+    @State private var showBranchPickerFor: Repository?
+    @FocusState private var searchFocused: Bool
+
+    private var searchResults: [(repository: Repository, matchedBranches: [String])] {
+        state.sidebarSearch(query)
+    }
+
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if state.repositories.count > 1 || isSearching {
+                searchField
+                    .padding(.bottom, 10)
+            }
             repositoryList
             Divider().padding(.vertical, 10)
             actionButtons
@@ -25,6 +40,39 @@ struct SidebarView: View {
                 Task { await state.cloneRepository(from: url, into: folder) }
             }
         }
+        .sheet(item: $showBranchPickerFor) { repository in
+            BranchPickerSheet()
+                .environment(state)
+        }
+    }
+
+    // MARK: 搜索框
+
+    private var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+            TextField("搜仓库或分支名…", text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11.5))
+                .focused($searchFocused)
+            if isSearching {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("清空搜索")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .glassSurface(cornerRadius: 10)
+        .help("按仓库名、路径或分支名搜索；命中分支的仓库会列出匹配分支")
     }
 
     private var header: some View {
@@ -60,21 +108,32 @@ struct SidebarView: View {
             .padding(12)
             .glassSurface(cornerRadius: 16, tint: GlassPalette.blue.opacity(0.08))
             .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        } else if isSearching && searchResults.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(.tertiary)
+                Text("没有匹配「\(query)」的仓库或分支")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .padding(12)
         } else {
             List(selection: Binding(
                 get: { state.selectedRepoID },
                 set: { newValue in if let newValue { state.selectRepository(newValue) } }
             )) {
-                ForEach(Array(state.repositories.enumerated()), id: \.element.id) { index, repository in
-                    repositoryRow(repository)
+                ForEach(Array(searchResults.enumerated()), id: \.element.repository.id) { index, result in
+                    repositoryRow(result.repository, matchedBranches: result.matchedBranches)
                         .staggered(index)
                         .contextMenu {
                             Button("在 Finder 中显示") {
-                                NSWorkspace.shared.selectFile(repository.path, inFileViewerRootedAtPath: "")
+                                NSWorkspace.shared.selectFile(result.repository.path, inFileViewerRootedAtPath: "")
                             }
                             Divider()
                             Button("从列表移除", role: .destructive) {
-                                withAnimation(Motion.spring) { state.removeRepository(repository.id) }
+                                withAnimation(Motion.spring) { state.removeRepository(result.repository.id) }
                             }
                         }
                 }
@@ -82,10 +141,11 @@ struct SidebarView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             .frame(minHeight: 140)
+            .animation(Motion.snappy, value: query)
         }
     }
 
-    private func repositoryRow(_ repository: Repository) -> some View {
+    private func repositoryRow(_ repository: Repository, matchedBranches: [String]) -> some View {
         HStack(spacing: 9) {
             Image(systemName: "folder.fill")
                 .font(.system(size: 13))
@@ -94,11 +154,40 @@ struct SidebarView: View {
                 Text(repository.name)
                     .font(.system(size: 12.5, weight: .medium))
                     .lineLimit(1)
-                Text(repository.path)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if matchedBranches.isEmpty {
+                    Text(repository.path)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else {
+                    // 搜索命中分支：列出匹配的分支 chips，点击直接选仓库并打开分支选择器
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(matchedBranches, id: \.self) { branch in
+                            Button {
+                                state.selectRepository(repository.id)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    showBranchPickerFor = repository
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.triangle.branch")
+                                        .font(.system(size: 8.5))
+                                    Text(branch)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(GlassPalette.violet)
+                            .background(GlassPalette.violet.opacity(0.10), in: Capsule())
+                            .help("选中 \(repository.name) 并打开分支选择器")
+                        }
+                    }
+                }
             }
             Spacer(minLength: 0)
         }

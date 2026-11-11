@@ -510,6 +510,36 @@ struct GitGlassSelfTest {
                 check("AppKit 生成测试 PNG", false, "系统符号图不可用")
             }
 
+            // MARK: O 侧边栏搜索（按分支找仓库）
+            section("O · 侧边栏搜索")
+            let repoA = UUID()
+            let repoB = UUID()
+            let searchState = await MainActor.run { AppState() }
+            await MainActor.run {
+                searchState.repositories = [
+                    Repository(id: repoA, name: "web-bi", path: "/tmp/web-bi"),
+                    Repository(id: repoB, name: "php-jdt", path: "/tmp/php-jdt")
+                ]
+                searchState.branchIndex = [
+                    repoA: ["main", "feature/order-wide", "release/1.4"],
+                    repoB: ["master", "hotfix/invoice"]
+                ]
+            }
+            let allResults = await MainActor.run { searchState.sidebarSearch("") }
+            check("空搜索返回全部仓库", allResults.count == 2)
+            let webResults = await MainActor.run { searchState.sidebarSearch("web-bi") }
+            check("按仓库名命中", webResults.count == 1 && webResults[0].repository.name == "web-bi")
+            let branchResults = await MainActor.run { searchState.sidebarSearch("order-wide") }
+            check("按分支名命中仓库", branchResults.count == 1 && branchResults[0].repository.name == "web-bi",
+                  branchResults.map(\.repository.name).joined(separator: ","))
+            check("命中分支带出 chips", branchResults.first?.matchedBranches.contains("feature/order-wide") == true)
+            let hotfixResults = await MainActor.run { searchState.sidebarSearch("hotfix") }
+            check("跨仓库分支命中", hotfixResults.count == 1 && hotfixResults[0].repository.name == "php-jdt")
+            let noneResults = await MainActor.run { searchState.sidebarSearch("不存在的关键字xyz") }
+            check("无命中返回空", noneResults.isEmpty)
+            let caseResults = await MainActor.run { searchState.sidebarSearch("ORDER-WIDE") }
+            check("搜索大小写不敏感", caseResults.count == 1)
+
             // MARK: L 轻量约束 / 模型契约
             section("L · 轻量约束 / 模型契约")
             check("刷新原因均为事件", RefreshReason.manual.rawValue == "手动刷新"

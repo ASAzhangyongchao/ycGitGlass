@@ -23,6 +23,9 @@ public final class AppState {
     public var commits: [Commit] = []
     public var remotes: [Remote] = []
     public var keys: [SSHKeyPair] = []
+    /// 仓库 id -> 分支名列表（小写缓存）。仅用于侧边栏"按分支搜仓库"，
+    /// 在每次 refresh 时顺带从已加载的 branches 数据构建，不产生额外 git 进程。
+    public var branchIndex: [UUID: [String]] = [:]
     public var lastRefreshed: Date?
     public var lastRefreshReason: String = ""
 
@@ -71,6 +74,27 @@ public final class AppState {
 
     public var currentRepository: Repository? { repositories.first { $0.id == selectedRepoID } }
     public var currentPath: String? { currentRepository?.path }
+
+    /// 侧边栏搜索：匹配仓库名 / 路径 / 该仓库包含的分支名。
+    /// 返回 (仓库, 命中的分支名列表)；分支列表非空表示是分支命中。
+    public func sidebarSearch(_ rawQuery: String) -> [(repository: Repository, matchedBranches: [String])] {
+        let query = rawQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else {
+            return repositories.map { ($0, []) }
+        }
+        return repositories.compactMap { repository in
+            let nameHit = repository.name.lowercased().contains(query)
+            let pathHit = repository.path.lowercased().contains(query)
+            let branchHits = (branchIndex[repository.id] ?? [])
+                .filter { $0.contains(query) }
+                .sorted()
+            let branchTop = Array(branchHits.prefix(3))
+            if nameHit || pathHit || !branchTop.isEmpty {
+                return (repository, branchTop)
+            }
+            return nil
+        }
+    }
     public var hasUpstream: Bool { !status.upstream.isEmpty }
     public var stagedFiles: [FileChange] { status.files.filter(\.isStaged) }
     public var unstagedFiles: [FileChange] { status.files.filter { !$0.isStaged } }
@@ -202,6 +226,10 @@ public final class AppState {
         stashes = newStashes
         tags = newTags
         conflictedFiles = newConflicts
+        // 分支名缓存：供侧边栏"按分支搜仓库"，纯内存构建零额外进程
+        if let repoID = selectedRepoID {
+            branchIndex[repoID] = newBranches.map { $0.name.lowercased() }
+        }
         // 纯文件检查，不产生额外进程
         inProgressOperation = git.inProgressOperation(at: path)
         lastRefreshed = Date()
@@ -862,6 +890,7 @@ public final class AppState {
         commits = []
         branches = []
         remotes = []
+        branchIndex = [:]
     }
 
     private func save() {
