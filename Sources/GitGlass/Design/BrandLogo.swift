@@ -46,29 +46,26 @@ struct BrandHeader: View {
             Button {
                 state.openAbout()
             } label: {
-                HStack(spacing: 9) {
+                HStack(spacing: 7) {
                     Image(nsImage: Brand.headerImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 30, height: 30)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .frame(width: 20, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(Color.white.opacity(0.55), lineWidth: 0.8)
                         )
-                        .shadow(color: .black.opacity(0.14), radius: 5, x: 0, y: 2)
 
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 5) {
                             Text(Brand.name)
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
                             Text(Brand.englishName)
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 9.5, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
-                        Text(Brand.tagline)
-                            .font(.system(size: 9))
-                            .foregroundStyle(.tertiary)
+                    }
                     }
                 }
                 .contentShape(Rectangle())
@@ -110,10 +107,9 @@ struct BrandHeader: View {
                 state.openAbout()
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .glassSurface(cornerRadius: 15, tint: GlassPalette.blue.opacity(0.07))
-        .cardShadow()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .glassSurface(cornerRadius: 13, tint: GlassPalette.blue.opacity(0.07))
     }
 
     /// 更新状态：有新版本时给出醒目入口；平时只留一个安静的刷新点。

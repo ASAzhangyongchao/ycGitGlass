@@ -17,7 +17,7 @@ struct RootView: View {
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
                 BrandHeader()
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 8)
                 actionBar
                 tabBar
                 content
