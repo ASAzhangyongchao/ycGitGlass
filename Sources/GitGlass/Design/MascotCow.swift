@@ -37,24 +37,18 @@ struct MascotCow: View {
             .resizable()
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
-            .frame(width: 118, height: 118)
-            // 贴纸白边（微信贴纸质感）
-            .padding(5)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.white)
-                    .shadow(color: .black.opacity(0.16), radius: 7, x: 0, y: 3)
-            )
+            .frame(width: 88, height: 88)
+            // 无白边：直接圆角裁切 + 轻投影（融入侧边栏，不抢视觉）
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(
-                        angry
-                            ? Color(red: 0.9, green: 0.3, blue: 0.25).opacity(0.7)
-                            : Color.black.opacity(0.06),
-                        lineWidth: angry ? 2 : 1
+                        angry ? Color(red: 0.9, green: 0.3, blue: 0.25).opacity(0.7) : .clear,
+                        lineWidth: 2
                     )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: angry ? Color(red: 0.9, green: 0.3, blue: 0.25).opacity(0.4) : .black.opacity(0.13),
+                    radius: angry ? 10 : 5, y: 3)
             .overlay { angryFace }
             .overlay(alignment: .topTrailing) { sweat }
             .hueRotation(.degrees(angry ? -14 : 0))
@@ -145,14 +139,14 @@ struct MascotCow: View {
                         angryEye
                         angryEye
                     }
-                    .padding(.top, 36)
+                    .padding(.top, 26)
                     Spacer()
                     // 怒气符号：漫画式青筋
                     Text("💢")
-                        .font(.system(size: 17))
+                        .font(.system(size: 14))
                         .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing, 14)
-                        .padding(.bottom, 14)
+                        .padding(.trailing, 10)
+                        .padding(.bottom, 10)
                 }
             }
         }
@@ -190,11 +184,8 @@ struct MascotCow: View {
     private var angryBubble: some View {
         VStack(spacing: 2) {
             Text("莫挨老子！😤")
-                .font(.system(size: 12.5, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
-            Text("牛马愤怒")
-                .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
