@@ -7,6 +7,7 @@ struct RootView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var newBranchName = ""
     @State private var showNewBranch = false
+    @State private var showBranchPicker = false
     @Namespace private var tabIndicator
 
     var body: some View {
@@ -43,6 +44,9 @@ struct RootView: View {
                 Task { await state.createBranch(newBranchName) }
                 newBranchName = ""
             }
+        }
+        .sheet(isPresented: $showBranchPicker) {
+            BranchPickerSheet()
         }
         .sheet(isPresented: Binding(
             get: { state.showAbout },
@@ -109,40 +113,27 @@ struct RootView: View {
     }
 
     private var branchMenu: some View {
-        Menu {
-            Section("本地分支") {
-                ForEach(state.localBranches) { branch in
-                    Button {
-                        Task { await state.checkout(branch) }
-                    } label: {
-                        HStack {
-                            Text(branch.displayName)
-                            if branch.isCurrent { Image(systemName: "checkmark") }
-                        }
-                    }
-                }
-            }
-            if !state.remoteBranches.isEmpty {
-                Section("远程分支") {
-                    ForEach(state.remoteBranches) { branch in
-                        Button(branch.displayName) {
-                            Task { await state.checkout(branch) }
-                        }
-                    }
-                }
-            }
-            Divider()
-            Button("新建分支…") { showNewBranch = true }
+        Button {
+            showBranchPicker = true
         } label: {
-            Label(state.status.branch.isEmpty ? "选择分支" : state.status.branch,
-                  systemImage: "chevron.up.chevron.down")
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .glassPill(interactive: true)
+            HStack(spacing: 7) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(state.status.branch.isEmpty ? "选择分支" : state.status.branch)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 180, alignment: .leading)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .glassPill(interactive: true)
         }
-        .menuStyle(.borderlessButton)
-        .help("切换分支会自动刷新一次")
+        .buttonStyle(.plain)
+        .help("打开分支选择器：搜索、本地/远程分页、按来源折叠")
     }
 
     // MARK: 分段控件（玻璃形变过渡）
