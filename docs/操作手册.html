@@ -126,7 +126,7 @@
   <div class="meta">
     <div>应用体积约 3.5 MB</div>
     <div>空闲内存约 38 MB</div>
-    <div>自检 129 项通过</div>
+    <div>自检 150 项通过</div>
     <div>编译 0 error / 0 warning</div>
   </div>
 </header>
@@ -155,18 +155,18 @@
   <h2><em>01</em> 安装与迁移</h2>
   <h3>直接在 Apple Silicon Mac 安装</h3>
   <ol>
-    <li>解压 <code>GitGlass-1.3.0-macOS26.zip</code>，把 <code>GitGlass.app</code> 拖进「应用程序」。</li>
-    <li>若提示「无法验证开发者」，执行 <code>xattr -cr /Applications/GitGlass.app</code>，或右键 → 「打开」。</li>
-    <li>运行 <code>open /Applications/GitGlass.app</code>。</li>
+    <li>解压 <code>MooGit-1.3.0-macOS26.zip</code>，把 <code>码牛 MooGit.app</code> 拖进「应用程序」。</li>
+    <li>若提示「无法验证开发者」，执行 <code>xattr -cr /Applications/码牛 MooGit.app</code>，或右键 → 「打开」。</li>
+    <li>运行 <code>open /Applications/码牛 MooGit.app</code>。</li>
   </ol>
   <div class="note warn">现成 .app 是 arm64 架构、ad-hoc 本地签名。仅装 Command Line Tools 的环境无法构建通用二进制（缺 XCBuild.framework），所以 Intel Mac 请走源码重建。</div>
 
   <h3>在另一台 Mac 从源码构建</h3>
-  <pre><code>cd GitGlass-1.3.0-macOS26
+  <pre><code>cd MooGit-1.3.0-macOS26
 xcode-select --install          # 已有 Xcode 26 可跳过
 chmod +x scripts/build-app.sh
 ./scripts/build-app.sh          # 自动编译当前机器架构
-open dist/GitGlass.app</code></pre>
+open dist/码牛 MooGit.app</code></pre>
   <p>脚本中的 <code>--disable-sandbox</code> 用于受管环境不允许 SwiftPM 嵌套沙箱的情况，普通 Xcode 环境保留也无害。</p>
 
   <h3>迁移个人配置</h3>
@@ -175,7 +175,7 @@ open dist/GitGlass.app</code></pre>
     <tr><td>仓库列表、自定义平台、密钥归类</td><td>复制 <code>~/Library/Application Support/GitGlass/state.json</code> 到新机器同路径</td></tr>
     <tr><td>SSH 密钥</td><td>应用不会打包密钥；请自行安全迁移 <code>~/.ssh/</code>，或在新机器重新生成并添加公钥</td></tr>
     <tr><td>SSH Host 规则</td><td>新机器「密钥」页点「写入 ~/.ssh/config」重新生成</td></tr>
-    <tr><td>卸载</td><td>删除 <code>GitGlass.app</code>；想清配置再删上述 <code>state.json</code></td></tr>
+    <tr><td>卸载</td><td>删除 <code>码牛 MooGit.app</code>；想清配置再删上述 <code>state.json</code></td></tr>
   </table>
 </section>
 
@@ -350,7 +350,7 @@ open dist/GitGlass.app</code></pre>
   <h2><em>11</em> 故障排查</h2>
   <table>
     <tr><th>现象</th><th>处理</th></tr>
-    <tr><td>提示「无法验证开发者」</td><td><code>xattr -cr /Applications/GitGlass.app</code> 或右键「打开」</td></tr>
+    <tr><td>提示「无法验证开发者」</td><td><code>xattr -cr /Applications/码牛 MooGit.app</code> 或右键「打开」</td></tr>
     <tr><td>「不是 Git 仓库」</td><td>目录里没有 <code>.git</code>；用「新建仓库」初始化或重新选目录</td></tr>
     <tr><td>推送被拒绝</td><td>远程有新提交，先「拉取」再推送</td></tr>
     <tr><td>SSH 认证失败</td><td>确认公钥已加到平台账号、私钥存在且权限 600，点「测试连接」</td></tr>
@@ -390,7 +390,7 @@ CommandRunner (Process, 参数数组 + 临时文件输出 + 超时保护)</code>
   <p>持久化用单个 JSON 文件，不引入数据库；错误用 <code>AppError</code> 类型化 + 中文恢复建议；Swift 6 严格并发；用 continuation 排队避免快速切仓库时刷新被丢弃。</p>
   <h3>自检</h3>
   <pre><code>swift run --disable-sandbox GitGlassSelfTest
-# 结果：129 通过，0 失败</code></pre>
+# 结果：150 通过，0 失败</code></pre>
   <p>在临时 Git 仓库与临时 SSH 目录上分 12 个章节覆盖状态、暂存、提交、历史搜索、遴选、还原、<strong>冲突检测与选边 / 继续 / 中止</strong>、储藏、标签、提交详情、中文空格路径、远程源、错误映射、持久化、密钥生成与权限、SSH config 幂等与备份、命令超时与并发、模型契约；不触碰用户真实 <code>~/.ssh</code>。</p>
   <h3>扩展点</h3>
   <ul>

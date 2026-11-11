@@ -8,6 +8,13 @@ public struct CommandResult: Sendable {
     public var wasTerminated: Bool
 }
 
+public struct RawCommandResult: Sendable {
+    public var data: Data
+    public var stderr: String
+    public var exitCode: Int32
+    public var wasTerminated: Bool
+}
+
 /// 唯一的外部进程出口。
 /// 设计要点：
 /// 1. 参数以 [String] 传递、绝不拼 shell 字符串，杜绝命令注入；
@@ -38,6 +45,100 @@ public struct CommandRunner: Sendable {
                 timeout: limit
             )
         }.value
+    }
+
+    /// 二进制安全通道：stdout 以原始 Data 返回（用于图片 blob 等二进制内容）。
+    public func runRaw(
+        executable: String,
+        arguments: [String],
+        workingDirectory: URL? = nil,
+        environmentOverrides: [String: String] = [:],
+        timeout: TimeInterval = 20
+    ) async throws -> RawCommandResult {
+        let directory = workingDirectory?.path
+        let overrides = environmentOverrides
+        let tool = executable
+        let args = arguments
+        let limit = timeout
+        return try await Task.detached(priority: .userInitiated) {
+            try CommandRunner.executeRaw(
+                executable: tool,
+                arguments: args,
+                workingDirectory: directory,
+                environmentOverrides: overrides,
+                timeout: limit
+            )
+        }.value
+    }
+
+    private static func executeRaw(
+        executable: String,
+        arguments: [String],
+        workingDirectory: String?,
+        environmentOverrides: [String: String],
+        timeout: TimeInterval
+    ) throws -> RawCommandResult {
+        guard FileManager.default.isExecutableFile(atPath: executable) else {
+            throw AppError.io("找不到可执行文件：\(executable)")
+        }
+
+        let fm = FileManager.default
+        let token = UUID().uuidString
+        let outURL = fm.temporaryDirectory.appendingPathComponent("gitglass-\(token)-raw-out")
+        let errURL = fm.temporaryDirectory.appendingPathComponent("gitglass-\(token)-raw-err")
+        defer {
+            try? fm.removeItem(at: outURL)
+            try? fm.removeItem(at: errURL)
+        }
+        guard fm.createFile(atPath: outURL.path, contents: nil),
+              fm.createFile(atPath: errURL.path, contents: nil) else {
+            throw AppError.io("无法创建临时输出文件")
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        if let workingDirectory { process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory, isDirectory: true) }
+        var environment = ProcessInfo.processInfo.environment
+        environment["GIT_TERMINAL_PROMPT"] = "0"
+        environment["LC_ALL"] = "en_US.UTF-8"
+        for (key, value) in environmentOverrides { environment[key] = value }
+        process.environment = environment
+
+        let outHandle = try FileHandle(forWritingTo: outURL)
+        let errHandle = try FileHandle(forWritingTo: errURL)
+        process.standardOutput = outHandle
+        process.standardError = errHandle
+
+        do {
+            try process.run()
+        } catch {
+            try? outHandle.close()
+            try? errHandle.close()
+            throw AppError.io("启动命令失败：\(error.localizedDescription)")
+        }
+
+        let pid = process.processIdentifier
+        let flag = TimeoutFlag()
+        let timeoutItem = DispatchWorkItem {
+            guard !flag.isFinished else { return }
+            kill(pid, SIGTERM)
+        }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
+        process.waitUntilExit()
+        flag.markFinished()
+        timeoutItem.cancel()
+        try? outHandle.close()
+        try? errHandle.close()
+
+        let outData = (try? Data(contentsOf: outURL)) ?? Data()
+        let errData = (try? Data(contentsOf: errURL)) ?? Data()
+        return RawCommandResult(
+            data: outData,
+            stderr: String(decoding: errData, as: UTF8.self),
+            exitCode: process.terminationStatus,
+            wasTerminated: process.terminationReason == .uncaughtSignal
+        )
     }
 
     private static func execute(

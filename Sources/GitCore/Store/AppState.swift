@@ -49,6 +49,10 @@ public final class AppState {
     public var updateState: UpdateState = .idle
     /// 上次自动检查更新的时间戳（UserDefaults 存储的秒数）。为保持零轮询，只有启动时距上次 ≥24h 才静默检查一次。
     public var lastAutoUpdateCheck: Date?
+    /// 图片差异预览：当前加载的图片对与文件路径
+    public var imageDiff: ImageDiffService.Pair?
+    public var imageDiffPath: String?
+    public var isLoadingImageDiff = false
 
     private static let autoCheckInterval: TimeInterval = 24 * 3600
     private static let lastCheckKey = "lastAutoUpdateCheck"
@@ -433,9 +437,29 @@ public final class AppState {
     public func loadDiff(for file: FileChange) async {
         guard let path = currentPath else { return }
         diffFilePath = file.path
+        imageDiff = nil
+        imageDiffPath = nil
+        if ImageDiffService.isImagePath(file.path) {
+            await loadImageDiff(path: file.path) { service in
+                try await service.worktreeImages(file: file.path, at: path)
+            }
+            return
+        }
         await perform("正在读取差异") {
             self.diffText = try await self.git.diff(for: file.path, staged: file.isStaged, at: path)
         }
+    }
+
+    private func loadImageDiff(path filePath: String,
+                               _ fetch: @MainActor @escaping (ImageDiffService) async throws -> ImageDiffService.Pair) async {
+        isLoadingImageDiff = true
+        await perform("正在读取图片") {
+            let service = ImageDiffService()
+            let pair = try await fetch(service)
+            self.imageDiff = pair
+            self.imageDiffPath = filePath
+        }
+        isLoadingImageDiff = false
     }
 
     // MARK: - 同步
@@ -615,6 +639,14 @@ public final class AppState {
     public func loadDetailDiff(file: String) async {
         guard let path = currentPath, let hash = selectedCommit?.hash else { return }
         detailDiffFile = file
+        imageDiff = nil
+        imageDiffPath = nil
+        if ImageDiffService.isImagePath(file) {
+            await loadImageDiff(path: file) { service in
+                try await service.images(inCommit: hash, file: file, at: path)
+            }
+            return
+        }
         await perform("正在读取文件差异") {
             self.detailDiff = try await self.git.diffInCommit(hash, file: file, at: path)
         }

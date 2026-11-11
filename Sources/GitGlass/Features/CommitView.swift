@@ -14,9 +14,9 @@ struct CommitView: View {
             EmptyStateView(title: "还没有仓库", message: "先在左侧添加一个 Git 仓库。", icon: "folder")
         } else {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 18) {
                     composer
-                    HStack(alignment: .top, spacing: 16) {
+                    HStack(alignment: .top, spacing: 18) {
                         fileList
                         diffPanel
                     }
@@ -251,7 +251,18 @@ struct CommitView: View {
     private var diffPanel: some View {
         GlassCard(title: "差异预览", icon: "text.alignleft",
                   subtitle: state.diffFilePath.isEmpty ? "点击左侧文件查看" : state.diffFilePath) {
-            if state.diffText.isEmpty {
+            if let imageDiff = state.imageDiff, let imagePath = state.imageDiffPath, imagePath == state.diffFilePath {
+                // 图片变更：并排 / 滑块叠加 / 差异高亮
+                ImageDiffView(pair: imageDiff, filePath: imagePath)
+            } else if state.isLoadingImageDiff {
+                VStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("正在读取图片…")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 180)
+            } else if state.diffText.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 26, weight: .light))
@@ -259,6 +270,9 @@ struct CommitView: View {
                     Text("选中一个文件后，这里显示逐行改动")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
+                    Text("图片文件支持并排与叠加对比")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 180)
             } else {

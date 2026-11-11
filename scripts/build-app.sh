@@ -1,5 +1,5 @@
 #!/bin/bash
-# 构建可双击运行的 GitGlass.app（零第三方依赖，直接复用系统 SwiftUI / git / ssh）
+# 构建可双击运行的 码牛 MooGit.app（零第三方依赖，直接复用系统 SwiftUI / git / ssh）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,7 +17,7 @@ if [[ ! -x "$BIN" ]]; then
   exit 1
 fi
 
-APP="$ROOT/dist/GitGlass.app"
+APP="$ROOT/dist/码牛 MooGit.app"
 echo "==> 2/4 组装 .app bundle"
 if pgrep -f "$APP/Contents/MacOS/GitGlass" >/dev/null 2>&1; then
   echo "    [注意] 检测到应用正在运行，覆盖后请退出并重新打开"

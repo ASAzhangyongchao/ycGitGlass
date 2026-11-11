@@ -5,11 +5,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="1.3.0"
 # 顶层目录与包名保持 ASCII，避免其它解压工具对中文条目名乱码
-NAME="GitGlass-${VERSION}-macOS26"
+NAME="MooGit-${VERSION}-macOS26"
 OUT="$ROOT/dist/${NAME}.zip"
 
-if [[ ! -d "$ROOT/dist/GitGlass.app" ]]; then
-  echo "缺少 dist/GitGlass.app，请先执行：./scripts/build-app.sh" >&2
+if [[ ! -d "$ROOT/dist/码牛 MooGit.app" ]]; then
+  echo "缺少 dist/码牛 MooGit.app，请先执行：./scripts/build-app.sh" >&2
   exit 1
 fi
 
@@ -19,7 +19,7 @@ trap 'rm -rf "$STAGE_PARENT"' EXIT
 STAGE="$STAGE_PARENT/$NAME"
 mkdir -p "$STAGE"
 
-cp -R "$ROOT/dist/GitGlass.app" "$STAGE/"
+cp -R "$ROOT/dist/码牛 MooGit.app" "$STAGE/"
 cp "$ROOT/Package.swift" "$STAGE/"
 cp "$ROOT/README.md" "$STAGE/"
 cp "$ROOT/CHANGELOG.md" "$STAGE/"

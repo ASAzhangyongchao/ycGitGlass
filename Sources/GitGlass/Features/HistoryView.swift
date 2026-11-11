@@ -11,7 +11,7 @@ struct HistoryView: View {
         if state.currentRepository == nil {
             EmptyStateView(title: "还没有仓库", message: "先在左侧添加一个 Git 仓库。", icon: "clock")
         } else {
-            VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 15) {
                 searchBar
                 HStack(alignment: .top, spacing: 14) {
                     GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
@@ -113,15 +113,16 @@ struct HistoryView: View {
             .frame(maxWidth: .infinity, minHeight: 180)
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(state.filteredCommits.enumerated()), id: \.element.id) { index, commit in
                         commitRow(commit)
                             .staggered(index)
                         if index < state.filteredCommits.count - 1 {
-                            Divider().opacity(0.45)
+                            Divider().opacity(0.35).padding(.vertical, 2)
                         }
                     }
                 }
+                .padding(.vertical, 4)
             }
         }
     }
@@ -160,8 +161,8 @@ struct HistoryView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(selected ? GlassPalette.accent : Color.secondary.opacity(0.5))
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 7)
+            .padding(.vertical, 9)
+            .padding(.horizontal, 8)
             .contentShape(Rectangle())
             .background(
                 selected ? GlassPalette.accent.opacity(0.10) : Color.clear,

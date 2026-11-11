@@ -57,17 +57,17 @@ jobs:
 
       - name: Verify bundle
         run: |
-          test -x dist/GitGlass.app/Contents/MacOS/GitGlass
-          test -f dist/GitGlass.app/Contents/Resources/AppIcon.icns
-          test -f dist/GitGlass.app/Contents/Resources/BrandHeader.png
-          test "$(plutil -extract CFBundleName raw dist/GitGlass.app/Contents/Info.plist)" = "码牛"
-          plutil -lint dist/GitGlass.app/Contents/Info.plist
-          lipo -info dist/GitGlass.app/Contents/MacOS/GitGlass
+          test -x dist/码牛 MooGit.app/Contents/MacOS/GitGlass
+          test -f dist/码牛 MooGit.app/Contents/Resources/AppIcon.icns
+          test -f dist/码牛 MooGit.app/Contents/Resources/BrandHeader.png
+          test "$(plutil -extract CFBundleName raw dist/码牛 MooGit.app/Contents/Info.plist)" = "码牛"
+          plutil -lint dist/码牛 MooGit.app/Contents/Info.plist
+          lipo -info dist/码牛 MooGit.app/Contents/MacOS/GitGlass
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v4
         with:
           name: GitGlass-app-${{ github.sha }}
-          path: dist/GitGlass.app
+          path: dist/码牛 MooGit.app
           if-no-files-found: error
           retention-days: 14

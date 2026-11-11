@@ -57,7 +57,7 @@ jobs:
 
       - name: Verify artifacts
         run: |
-          test -x dist/GitGlass.app/Contents/MacOS/GitGlass
+          test -x dist/码牛 MooGit.app/Contents/MacOS/GitGlass
           ls -lh dist/*.zip
           unzip -t dist/*.zip | tail -1
 

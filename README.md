@@ -13,7 +13,7 @@
 
 | 内容 | 路径 | 说明 |
 |---|---|---|
-| 可直接运行的应用 | `GitGlass.app` | arm64 原生、ad-hoc 签名，约 6.8 MB（含品牌图标） |
+| 可直接运行的应用 | `码牛 MooGit.app` | arm64 原生、ad-hoc 签名，约 6.8 MB（含品牌图标） |
 | 完整源码 | `Sources/` | Swift 6.2，26 个文件，按功能分层 |
 | 工程清单 | `Package.swift` | SwiftPM，可在任意 Mac 上重建 |
 | 应用配置 | `Resources/Info.plist` | 产品名「码牛 MooGit」，版本 1.3.0，最低 macOS 26.0 |
@@ -39,13 +39,13 @@
 
 ```bash
 # 1. 解压后把应用拖进「应用程序」，也可以停留在任意目录
-cp -R GitGlass.app /Applications/
+cp -R 码牛 MooGit.app /Applications/
 
 # 2. 如果系统提示「无法验证开发者」，去掉隔离属性（ad-hoc 签名的正常现象）
-xattr -cr /Applications/GitGlass.app
+xattr -cr /Applications/码牛 MooGit.app
 
 # 3. 启动
-open /Applications/GitGlass.app
+open /Applications/码牛 MooGit.app
 ```
 
 也可以在 Finder 里右键应用 → 「打开」→ 确认一次。
@@ -54,7 +54,7 @@ open /Applications/GitGlass.app
 
 ```bash
 # 1. 把整个解压目录拷过去（必须包含 Sources/ 和 Package.swift）
-cd GitGlass-1.3.0-macOS26
+cd MooGit-1.3.0-macOS26
 
 # 2. 准备编译工具（若已有 Xcode 26 可跳过）
 xcode-select --install
@@ -64,15 +64,15 @@ chmod +x scripts/build-app.sh
 ./scripts/build-app.sh
 
 # 4. 启动
-open dist/GitGlass.app
+open dist/码牛 MooGit.app
 ```
 
-脚本里的 `--disable-sandbox` 是为受管环境准备的（SwiftPM 默认会再套一层 sandbox-exec）；普通 Xcode 环境保留也无害。构建产物在 `dist/GitGlass.app`，日志会打印目标架构。
+脚本里的 `--disable-sandbox` 是为受管环境准备的（SwiftPM 默认会再套一层 sandbox-exec）；普通 Xcode 环境保留也无害。构建产物在 `dist/码牛 MooGit.app`，日志会打印目标架构。
 
 ### C. 验证安装
 
 ```bash
-swift run --disable-sandbox GitGlassSelfTest   # 服务层深度自检，应输出 129 通过 / 0 失败
+swift run --disable-sandbox GitGlassSelfTest   # 服务层深度自检，应输出 150 通过 / 0 失败
 ```
 
 ### 3.4 安装后你会看到
@@ -102,7 +102,7 @@ swift run --disable-sandbox GitGlassSelfTest   # 服务层深度自检，应输�
 | SSH Host 配置 | `~/.ssh/config` | 应用只改 `# >>> GitGlass managed >>>` 标记块；首次写入备份为 `config.gitglass.bak` |
 | 仓库本身 | 各自目录 | 用 git 自己管理，与应用无关 |
 
-卸载：删除 `GitGlass.app` 即可；想连配置一起清掉，再删除上面那个 `state.json`。
+卸载：删除 `码牛 MooGit.app` 即可；想连配置一起清掉，再删除上面那个 `state.json`。
 
 ## 6. 命令速查
 
@@ -114,8 +114,8 @@ swift run --disable-sandbox GitGlassSelfTest   # 服务层深度自检，应输�
 | `swift scripts/make-icon.swift` | 无源图时的程序化图标兜底 |
 | `./scripts/release.sh v1.3.0` | 校验版本与自检后打 tag，触发 CI 自动发布 Release |
 | `swift build --disable-sandbox` | Debug 编译（0 error / 0 warning） |
-| `swift run --disable-sandbox GitGlassSelfTest` | 真实临时仓库上的 129 项自检 |
-| `open dist/GitGlass.app` | 启动应用 |
+| `swift run --disable-sandbox GitGlassSelfTest` | 真实临时仓库上的 150 项自检 |
+| `open dist/码牛 MooGit.app` | 启动应用 |
 
 ## 7. 源码结构
 
@@ -168,7 +168,7 @@ CHANGELOG.md / CONTRIBUTING.md / LICENSE
 
 | 机制 | 文件 | 作用 |
 |---|---|---|
-| CI | `.github/workflows/ci.yml` | 在 `macos-26` runner 上编译、跑 129 项自检、静态检查无轮询、组装 `.app` 并上传 artifact |
+| CI | `.github/workflows/ci.yml` | 在 `macos-26` runner 上编译、跑 150 项自检、静态检查无轮询、组装 `.app` 并上传 artifact |
 | 自动发布 | `.github/workflows/release.yml` | 推送 `v*` tag 后自动构建分发 zip 并发布到 GitHub Releases |
 | 本地发版 | `scripts/release.sh` | 校验版本号 / 工作区 / 自检，创建并推送 tag |
 | 问题反馈 | `.github/ISSUE_TEMPLATE/` | 结构化 Bug / 功能建议模板 |

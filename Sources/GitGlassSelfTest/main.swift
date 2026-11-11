@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import GitCore
 
 /// 深度自检：在真实临时 Git 仓库 + 临时 SSH 目录上跑通全部服务层能力，不依赖 GUI、不触碰用户真实 ~/.ssh。
@@ -447,6 +448,67 @@ struct GitGlassSelfTest {
             }
             check("并发 5 条命令全部成功", concurrent.count == 5 && Set(concurrent).count == 5)
             check("空仓库状态解析仍正常", try await git.status(at: repo.path).isClean)
+
+            // MARK: N 图片差异
+            section("N · 图片差异预览")
+            check("PNG 后缀识别", ImageDiffService.isImagePath("Assets/icon.png")
+                  && ImageDiffService.isImagePath("a.JPEG") && !ImageDiffService.isImagePath("a.swift"))
+
+            // 用 AppKit 生成两张真实的 PNG，走一遍提交 → 提取流程
+            let imageService = ImageDiffService()
+            if let oldImage = NSImage(systemSymbolName: "star.fill", accessibilityDescription: nil),
+               let oldTiff = oldImage.tiffRepresentation,
+               let oldRep = NSBitmapImageRep(data: oldTiff),
+               let oldPng = oldRep.representation(using: .png, properties: [:]),
+               let newImage = NSImage(systemSymbolName: "heart.fill", accessibilityDescription: nil),
+               let newTiff = newImage.tiffRepresentation,
+               let newRep = NSBitmapImageRep(data: newTiff),
+               let newPng = newRep.representation(using: .png, properties: [:]) {
+                let fm2 = FileManager.default
+                try fm2.createDirectory(at: repo.appendingPathComponent("Assets"),
+                                        withIntermediateDirectories: true)
+                try oldPng.write(to: repo.appendingPathComponent("Assets/pic.png"))
+                try await git.stageAll(at: repo.path)
+                _ = try await git.commit(message: "chore: 添加旧图片", at: repo.path)
+                try newPng.write(to: repo.appendingPathComponent("Assets/pic.png"))
+                try await git.stageAll(at: repo.path)
+                _ = try await git.commit(message: "chore: 更新图片", at: repo.path)
+
+                let imageCommit = try await git.log(at: repo.path, query: "更新图片").first?.hash ?? ""
+                check("图片提交存在", !imageCommit.isEmpty)
+                let pair = try await imageService.images(inCommit: imageCommit,
+                                                         file: "Assets/pic.png", at: repo.path)
+                check("旧版图片字节提取", pair.beforeBytes == oldPng.count,
+                      "\(pair.beforeBytes) vs \(oldPng.count)")
+                check("新版图片字节提取", pair.afterBytes == newPng.count,
+                      "\(pair.afterBytes) vs \(newPng.count)")
+                check("二进制变更标记", pair.isBinaryChange)
+                check("新旧内容确实不同", pair.beforeData != pair.afterData)
+
+                // 新增文件场景：旧版应为空
+                try oldPng.write(to: repo.appendingPathComponent("Assets/added.png"))
+                try await git.stageAll(at: repo.path)
+                _ = try await git.commit(message: "chore: 新增图片", at: repo.path)
+                let addedCommit = try await git.log(at: repo.path, query: "新增图片").first?.hash ?? ""
+                let addedPair = try await imageService.images(inCommit: addedCommit,
+                                                              file: "Assets/added.png", at: repo.path)
+                check("新增图片旧版为空", addedPair.beforeBytes == 0)
+                check("新增图片新版有内容", addedPair.afterBytes == oldPng.count)
+
+                // 工作区通道：磁盘新版 + HEAD 版本。
+                // 注意：上一步「新增图片」提交已包含 pic.png 的改动，所以 HEAD 里是 newPng；
+                // 重新把磁盘改回 oldPng，制造一个真实的「磁盘≠HEAD」工作区差异。
+                try oldPng.write(to: repo.appendingPathComponent("Assets/pic.png"))
+                let workPair = try await imageService.worktreeImages(file: "Assets/pic.png", at: repo.path)
+                check("工作区通道新版来自磁盘", workPair.afterBytes == oldPng.count)
+                check("工作区通道旧版来自 HEAD", workPair.beforeBytes == newPng.count)
+                check("工作区新旧确实不同", workPair.beforeData != workPair.afterData)
+                // 收尾：把磁盘图片提交掉，保持工作区干净（后面的 L 段有此断言）
+                try await git.stageAll(at: repo.path)
+                _ = try await git.commit(message: "chore: 收尾图片状态", at: repo.path)
+            } else {
+                check("AppKit 生成测试 PNG", false, "系统符号图不可用")
+            }
 
             // MARK: L 轻量约束 / 模型契约
             section("L · 轻量约束 / 模型契约")

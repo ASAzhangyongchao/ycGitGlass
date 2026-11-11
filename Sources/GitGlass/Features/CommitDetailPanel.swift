@@ -225,6 +225,7 @@ struct CommitDetailPanel: View {
         }
     }
 
+    @ViewBuilder
     private var diffSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(state.detailDiffFile)
@@ -232,8 +233,19 @@ struct CommitDetailPanel: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            DiffTextView(text: state.detailDiff)
-                .frame(height: 210)
+            if let imageDiff = state.imageDiff, let imagePath = state.imageDiffPath,
+               imagePath == state.detailDiffFile {
+                ImageDiffView(pair: imageDiff, filePath: imagePath)
+            } else if state.isLoadingImageDiff {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在读取图片…").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                DiffTextView(text: state.detailDiff)
+                    .frame(height: 210)
+            }
         }
     }
 
