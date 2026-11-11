@@ -62,58 +62,47 @@ struct CommitView: View {
     /// 输入框默认单行高（36），聚焦后撑到多行（110），失焦回落。
     @FocusState private var commitEditorFocused: Bool
 
+    /// 底部提交栏（Fork 式）：默认一行——输入框 + 暂存图标 + 提交按钮；
+    /// 聚焦时输入框撑高展开。不再是大卡片，把垂直空间全部留给文件列表与 diff。
     private var composer: some View {
-        GlassCard(title: "写一句提交说明", icon: "square.and.pencil",
-                  help: "说清「做了什么」即可，例如：修复登录页空白。\n也可先点一个快捷前缀（feat/fix/…），再补一句说明。写完点右下「提交」或「提交并推送」。") {
-            VStack(alignment: .leading, spacing: 11) {
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: Binding(
-                        get: { state.commitMessage },
-                        set: { state.commitMessage = $0 }
-                    ))
-                    .font(.system(size: 13))
-                    .focused($commitEditorFocused)
-                    .frame(height: commitEditorFocused ? 110 : 36)
-                    .padding(6)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(commitEditorFocused
-                                    ? GlassPalette.accent.opacity(0.45)
-                                    : Color.primary.opacity(0.08),
-                                    lineWidth: commitEditorFocused ? 1.5 : 1)
-                    )
-                    .animation(reduceMotion ? nil : Motion.snappy, value: commitEditorFocused)
+        HStack(alignment: .bottom, spacing: 10) {
+            // 输入框：默认单行矮条，聚焦撑高
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: Binding(
+                    get: { state.commitMessage },
+                    set: { state.commitMessage = $0 }
+                ))
+                .font(.system(size: 12.5))
+                .focused($commitEditorFocused)
+                .frame(height: commitEditorFocused ? 96 : 32)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .scrollContentBackground(.hidden)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(commitEditorFocused
+                                ? GlassPalette.accent.opacity(0.45)
+                                : Color.primary.opacity(0.08),
+                                lineWidth: commitEditorFocused ? 1.5 : 1)
+                )
+                .animation(reduceMotion ? nil : Motion.snappy, value: commitEditorFocused)
 
-                    // 占位提示
-                    if state.commitMessage.isEmpty && !commitEditorFocused {
-                        Text("一句提交说明，点此处展开…")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 12)
-                            .allowsHitTesting(false)
-                    }
+                if state.commitMessage.isEmpty && !commitEditorFocused {
+                    Text("一句提交说明…（⌘⏎ 提交）")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 9)
+                        .allowsHitTesting(false)
                 }
+            }
+            .frame(maxWidth: .infinity)
 
-                HStack(spacing: 7) {
-                    Text("快捷前缀").font(.system(size: 11)).foregroundStyle(.secondary)
-                    ForEach(Self.prefixes, id: \.self) { prefix in
-                        Button(prefix) { withAnimation(Motion.snappy) { state.appendCommitPrefix(prefix) } }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 4)
-                            .glassPill(interactive: true)
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                // 暂存操作：紧凑图标按钮一行放下，文字提示在悬停 help
-                HStack(spacing: 6) {
-                    ActionButton(title: "暂存所选 (\(state.selectedFilePaths.count))", icon: "plus.circle",
-                                 compact: true) {
+            // 右侧：暂存图标一行 + 前缀与提交按钮一行
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(spacing: 4) {
+                    ActionButton(title: "暂存所选", icon: "plus.circle", compact: true) {
                         Task { await state.stageSelected() }
                     }
                     .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
@@ -131,23 +120,28 @@ struct CommitView: View {
                     .disabled(state.status.isClean || state.isBusy)
                     .help("暂存全部改动")
 
-                    ActionButton(title: "储藏当前改动", icon: "archivebox", compact: true) {
+                    ActionButton(title: "储藏改动", icon: "archivebox", compact: true) {
                         Task { await state.stashPush() }
                     }
                     .disabled(state.isBusy || state.status.isClean)
                     .help("储藏当前改动，切分支或遴选前很方便")
-
-                    Spacer(minLength: 0)
                 }
 
-                // 提交动作行
                 HStack(spacing: 6) {
-                    if state.status.stagedCount == 0 {
-                        Text("先勾选文件暂存，提交按钮才会亮")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                    Menu {
+                        ForEach(Self.prefixes, id: \.self) { prefix in
+                            Button(prefix) { state.appendCommitPrefix(prefix) }
+                        }
+                    } label: {
+                        Label("前缀", systemImage: "text.prepend")
+                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                     }
-                    Spacer(minLength: 0)
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("插入快捷前缀：feat / fix / docs …")
 
                     ActionButton(title: "提交", icon: "arrow.up.doc", prominent: true,
                                  disabled: !canCommit) {
@@ -163,6 +157,9 @@ struct CommitView: View {
                 }
             }
         }
+        .padding(.horizontal, 2)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
     }
 
     private var canCommit: Bool {
