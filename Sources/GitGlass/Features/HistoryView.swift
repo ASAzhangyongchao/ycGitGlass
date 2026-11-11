@@ -31,8 +31,8 @@ struct HistoryView: View {
                         DiffViewerPanel()
                     }
                 }
-                .animation(reduceMotion ? nil : Motion.slide, value: state.showDetailPanel)
-                .animation(reduceMotion ? nil : Motion.slide, value: state.showDiffViewer)
+                .animation(reduceMotion ? nil : Motion.snappy, value: state.showDetailPanel)
+                .animation(reduceMotion ? nil : Motion.snappy, value: state.showDiffViewer)
             }
             .padding(.vertical, 6)
             .padding(.bottom, 20)

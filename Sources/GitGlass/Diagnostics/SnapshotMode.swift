@@ -1,0 +1,64 @@
+import SwiftUI
+import AppKit
+import GitCore
+
+/// 调试用：离屏渲染 HistoryView 快照（模拟工作台点击最近提交后的状态）。
+/// 用 `GitGlass --snap out.png [w h]` 触发，正常启动不执行。
+@MainActor
+enum SnapshotMode {
+    static func run() -> Bool {
+        let args = CommandLine.arguments
+        guard args.contains("--snap"), let index = args.firstIndex(of: "--snap"),
+              args.count > index + 1 else { return false }
+        setbuf(stdout, nil)
+        let out = args[index + 1]
+        let width: CGFloat = args.count > index + 3 ? CGFloat(Int(args[index + 2]) ?? 1100) : 1100
+        let height: CGFloat = args.count > index + 3 ? CGFloat(Int(args[index + 3]) ?? 700) : 700
+
+        let state = AppState()
+        let repo = Repository(id: UUID(), name: "GitGlass", path: "/tmp/xx")
+        state.repositories = [repo]
+        state.selectedRepoID = repo.id
+        var status = WorktreeStatus.empty
+        status.branch = "main"
+        state.status = status
+        var commits: [Commit] = []
+        for index in 0..<30 {
+            commits.append(Commit(
+                hash: "hash\(index)", shortHash: "s\(index)abc",
+                author: "张三", email: "z@x.c",
+                date: "2026-11-11T09:\(String(format: "%02d", index % 60)):00+08:00",
+                subject: "提交主题 \(index) 修复某某问题",
+                body: "", refs: index == 0 ? "HEAD -> main" : "",
+                graph: "* |"
+            ))
+        }
+        state.commits = commits
+        state.selectedCommit = commits[0]
+        state.showDetailPanel = true
+        state.commitDetail = CommitDetail(
+            hash: "hash0", authorName: "张三", authorEmail: "z@x.c",
+            authorDate: "2026-11-11 09:00",
+            committerName: "张三", committerEmail: "z@x.c",
+            committerDate: "2026-11-11 09:00",
+            parents: [], subject: "提交主题 0", body: "", refs: "HEAD -> main",
+            changedFiles: [], insertions: 10, deletions: 2, fileCount: 0)
+
+        _ = NSApplication.shared
+        let host = NSHostingView(rootView: HistoryView().environment(state))
+        host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        host.layoutSubtreeIfNeeded()
+        host.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+
+        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return true }
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        if let tiff = bitmap.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiff),
+           let png = rep.representation(using: NSBitmapImageRep.FileType.png, properties: [:]) {
+            try? png.write(to: URL(fileURLWithPath: out))
+            print("saved: \(out)")
+        }
+        exit(0)
+    }
+}

@@ -6,6 +6,10 @@ import GitCore
 struct GitGlassApp: App {
     @State private var state = AppState()
 
+    init() {
+        if SnapshotMode.run() { exit(0) }
+    }
+
     var body: some Scene {
         WindowGroup(Brand.fullName) {
             RootView()

@@ -228,11 +228,9 @@ struct RootView: View {
             case .keys: SSHKeyView()
             }
         }
-        .id(state.selectedTab)
-        .transition(.asymmetric(
-            insertion: .opacity.combined(with: .move(edge: .trailing)).combined(with: .scale(scale: 0.99)),
-            removal: .opacity
-        ))
-        .animation(reduceMotion ? nil : Motion.spring, value: state.selectedTab)
+        // 纯交叉淡化：不用 .id() 强制重建 + move 过渡——
+        // 从工作台带详情跳转历史页时，嵌套 move 动画会让布局卡在空态（实测空白卡）。
+        .transition(.opacity)
+        .animation(reduceMotion ? nil : Motion.snappy, value: state.selectedTab)
     }
 }
