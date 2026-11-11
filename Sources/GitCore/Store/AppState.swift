@@ -51,6 +51,8 @@ public final class AppState {
     public var inProgressOperation: String?
     public var conflictedFiles: [String] = []
     public var showDetailPanel = false
+    /// 历史/提交页的专属 Diff 查看器（第三栏）：点变更文件后打开
+    public var showDiffViewer = false
     public var showAbout = false
     public var updateState: UpdateState = .idle
     /// 上次自动检查更新的时间戳（UserDefaults 存储的秒数）。为保持零轮询，只有启动时距上次 ≥24h 才静默检查一次。
@@ -688,6 +690,7 @@ public final class AppState {
     public func openDetail(for commit: Commit) async {
         selectedCommit = commit
         showDetailPanel = true
+        showDiffViewer = false
         commitDetail = nil
         detailDiff = ""
         detailDiffFile = ""
@@ -702,6 +705,11 @@ public final class AppState {
 
     public func closeDetail() {
         showDetailPanel = false
+        showDiffViewer = false
+    }
+
+    public func closeDiffViewer() {
+        showDiffViewer = false
     }
 
     public func loadDetailDiff(file: String) async {
@@ -709,6 +717,7 @@ public final class AppState {
         detailDiffFile = file
         imageDiff = nil
         imageDiffPath = nil
+        showDiffViewer = true
         if ImageDiffService.isImagePath(file) {
             await loadImageDiff(path: file) { service in
                 try await service.images(inCommit: hash, file: file, at: path)
@@ -924,6 +933,7 @@ public final class AppState {
         inProgressOperation = nil
         conflictedFiles = []
         showDetailPanel = false
+        showDiffViewer = false
         historyQuery = ""
         deepSearchActive = false
         status = .empty

@@ -25,8 +25,14 @@ struct HistoryView: View {
                         CommitDetailPanel()
                             .frame(maxHeight: .infinity)
                     }
+
+                    // 第三栏：专属 Diff 阅读区（点变更文件后滑入，与列表同高）
+                    if state.showDiffViewer {
+                        DiffViewerPanel()
+                    }
                 }
                 .animation(reduceMotion ? nil : Motion.slide, value: state.showDetailPanel)
+                .animation(reduceMotion ? nil : Motion.slide, value: state.showDiffViewer)
             }
             .padding(.vertical, 6)
             .padding(.bottom, 20)

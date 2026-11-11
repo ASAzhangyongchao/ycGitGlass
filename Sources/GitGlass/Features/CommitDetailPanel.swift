@@ -22,9 +22,8 @@ struct CommitDetailPanel: View {
                         bodySection(detail.body)
                     }
                     filesSection(detail)
-                    if !state.detailDiff.isEmpty {
-                        diffSection
-                    }
+                    // diff 已移至独立的 DiffViewerPanel（历史页第三栏），
+                    // 这里不再内嵌 210pt 小框——阅读体验交给全高面板。
                 } else {
                     loading
                 }
@@ -205,7 +204,7 @@ struct CommitDetailPanel: View {
                     .font(.system(size: 10.5, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("点文件看差异")
+                Text("点文件在右侧看差异")
                     .font(.system(size: 9.5))
                     .foregroundStyle(.tertiary)
             }
@@ -221,30 +220,6 @@ struct CommitDetailPanel: View {
                 ) { node in
                     Task { await state.loadDetailDiff(file: node.path) }
                 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var diffSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(state.detailDiffFile)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            if let imageDiff = state.imageDiff, let imagePath = state.imageDiffPath,
-               imagePath == state.detailDiffFile {
-                ImageDiffView(pair: imageDiff, filePath: imagePath)
-            } else if state.isLoadingImageDiff {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("正在读取图片…").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 120)
-            } else {
-                DiffTextView(text: state.detailDiff)
-                    .frame(height: 210)
             }
         }
     }
