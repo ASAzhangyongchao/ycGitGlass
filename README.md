@@ -16,7 +16,7 @@
 | 可直接运行的应用 | `GitGlass.app` | arm64 原生、ad-hoc 签名，约 6.8 MB（含品牌图标） |
 | 完整源码 | `Sources/` | Swift 6.2，26 个文件，按功能分层 |
 | 工程清单 | `Package.swift` | SwiftPM，可在任意 Mac 上重建 |
-| 应用配置 | `Resources/Info.plist` | 产品名「码牛 MooGit」，版本 1.2.0，最低 macOS 26.0 |
+| 应用配置 | `Resources/Info.plist` | 产品名「码牛 MooGit」，版本 1.3.0，最低 macOS 26.0 |
 | 品牌资源 | `Resources/LogoSource.jpg` / `AppIcon.icns` / `BrandHeader.png` | 应用图标、Dock 图标与窗口页头图标；从 GitHub 直接 clone 时不带这些二进制，`build-app.sh` 会自动回退到程序化图标，功能不受影响 |
 | 脚本 | `scripts/` | `build-app.sh` 打包应用、`package.sh` 生成分发 zip |
 | 文档 | `README.md`、`docs/` | 本文件 + 完整操作手册（Markdown / HTML） |
@@ -54,7 +54,7 @@ open /Applications/GitGlass.app
 
 ```bash
 # 1. 把整个解压目录拷过去（必须包含 Sources/ 和 Package.swift）
-cd GitGlass-1.2.0-macOS26
+cd GitGlass-1.3.0-macOS26
 
 # 2. 准备编译工具（若已有 Xcode 26 可跳过）
 xcode-select --install
@@ -112,7 +112,7 @@ swift run --disable-sandbox GitGlassSelfTest   # 服务层深度自检，应输�
 | `./scripts/package.sh` | 生成含源码 + 应用 + 文档的分发 zip |
 | `swift scripts/make-brand-assets.swift` | 从 `Resources/LogoSource.jpg` 重新生成应用图标与页头图（`AppIcon.icns` / `BrandHeader.png`） |
 | `swift scripts/make-icon.swift` | 无源图时的程序化图标兜底 |
-| `./scripts/release.sh v1.2.0` | 校验版本与自检后打 tag，触发 CI 自动发布 Release |
+| `./scripts/release.sh v1.3.0` | 校验版本与自检后打 tag，触发 CI 自动发布 Release |
 | `swift build --disable-sandbox` | Debug 编译（0 error / 0 warning） |
 | `swift run --disable-sandbox GitGlassSelfTest` | 真实临时仓库上的 129 项自检 |
 | `open dist/GitGlass.app` | 启动应用 |
