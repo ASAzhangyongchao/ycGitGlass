@@ -13,11 +13,11 @@
 
 | 内容 | 路径 | 说明 |
 |---|---|---|
-| 可直接运行的应用 | `GitGlass.app` | arm64 原生、ad-hoc 签名，约 3.5 MB |
-| 完整源码 | `Sources/` | Swift 6.2，20+ 个文件，按功能分层 |
+| 可直接运行的应用 | `GitGlass.app` | arm64 原生、ad-hoc 签名，约 6.8 MB（含品牌图标） |
+| 完整源码 | `Sources/` | Swift 6.2，26 个文件，按功能分层 |
 | 工程清单 | `Package.swift` | SwiftPM，可在任意 Mac 上重建 |
 | 应用配置 | `Resources/Info.plist` | 产品名「码牛 MooGit」，版本 1.2.0，最低 macOS 26.0 |
-| 品牌资源 | `Resources/LogoSource.jpg` / `AppIcon.icns` / `BrandHeader.png` | 应用图标、Dock 图标与窗口页头图标 |
+| 品牌资源 | `Resources/LogoSource.jpg` / `AppIcon.icns` / `BrandHeader.png` | 应用图标、Dock 图标与窗口页头图标；从 GitHub 直接 clone 时不带这些二进制，`build-app.sh` 会自动回退到程序化图标，功能不受影响 |
 | 脚本 | `scripts/` | `build-app.sh` 打包应用、`package.sh` 生成分发 zip |
 | 文档 | `README.md`、`docs/` | 本文件 + 完整操作手册（Markdown / HTML） |
 
@@ -155,6 +155,14 @@ CHANGELOG.md / CONTRIBUTING.md / LICENSE
 ## 10. 在 GitHub 上维护
 
 仓库地址：**https://github.com/ASAzhangyongchao/ycGitGlass**（默认分支 `main`）。
+
+> **首次推送（一次性）**：WorkBuddy 的 GitHub 连接是只读集成令牌，写入会返回 `403 Resource not accessible by integration`，本地 HTTPS 也尚无凭据。请在终端完成一次认证：
+>
+> 1. 打开 https://github.com/settings/tokens 生成 classic PAT，勾选 `repo`；
+> 2. 运行 `./scripts/push-to-github.sh`（或 `git push -u origin main`）；
+> 3. 用户名填 GitHub 账号、密码粘贴 PAT，`osxkeychain` 会自动记住。
+>
+> 认证一次之后，后续迭代、tag、Release 都可以直接由助手 `git push` 完成。
 
 仓库采用 `main` 受保护分支 + PR 流程，贡献前先读 `CONTRIBUTING.md`。
 

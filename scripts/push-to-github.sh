@@ -30,6 +30,14 @@ if ! git ls-remote origin >/dev/null 2>&1; then
 fi
 
 echo "==> 推送到 $URL"
-git push -u origin main
+if ! git push -u origin main; then
+  echo "" >&2
+  echo "推送失败：本机 git 还没有 GitHub 写凭据（GitHub 已不支持账号密码）。" >&2
+  echo "一次性配置：" >&2
+  echo "  1. 打开 https://github.com/settings/tokens 生成 classic PAT，勾选 repo" >&2
+  echo "  2. 重新运行本脚本，用户名填 GitHub 账号，密码粘贴 PAT" >&2
+  echo "  3. osxkeychain 会记住，之后可直接 git push / 打 tag 发版" >&2
+  exit 1
+fi
 echo "完成：https://github.com/${REPO}"
 echo "推送 v1.2.0 tag 可触发自动 Release：git tag -a v1.2.0 -m 'Release v1.2.0' && git push origin v1.2.0"

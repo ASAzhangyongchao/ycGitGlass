@@ -20,6 +20,8 @@ swift run GitGlassSelfTest
 
 若本地环境不允许 SwiftPM 嵌套沙箱（报 `sandbox-exec: Operation not permitted`），给命令加 `--disable-sandbox`，打包脚本已内置该参数。
 
+**首次推送**：GitHub 连接通道为只读集成令牌（写操作返回 403）。第一次需要用自己的 PAT 认证一次：`./scripts/push-to-github.sh` → 用户名填账号、密码粘贴 PAT（osxkeychain 会记住），之后即可正常 `git push`。PAT 在 https://github.com/settings/tokens 生成，勾选 `repo` 即可，不要提交到仓库或聊天里。
+
 ## 2. 分支与提交
 
 - `main` 为受保护主分支，只通过 PR 合入；CI 通过才允许合并。
