@@ -1,62 +1,145 @@
 import SwiftUI
+import AppKit
 import GitCore
 
-/// 侧边栏左下角吉祥物：毛毡小牛伏案敲键盘，丝滑无缝循环。
-/// - 空闲：缓慢轻轻起伏（呼吸感）
-/// - isBusy：加速打字（蹄子交替 + 头部快频点头）
-/// - 头顶玻璃气泡显示日期 / 时间 / 星期
-/// - 系统开启「减弱动态效果」时保持静态姿势，不产生任何动画
+/// 侧边栏左下角吉祥物：直接使用品牌 logo（毛毡小牛真身，不再手绘仿品）。
+/// - 干活动画：logo 轻微起伏 + 微倾（敲代码的节奏感），忙碌时加快
+/// - 点击彩蛋：进入「牛马愤怒」1 秒——变红 + 生气 X 眼斜眉 + 气泡「莫挨老子！」，然后弹回干活
+/// - 头顶玻璃气泡显示 日期 / 星期 / 时间（TimelineView 分钟级，非 Timer）
+/// - Reduce Motion 下全部静止（点击仍显示愤怒气泡，无抖动）
 struct MascotCow: View {
     var isBusy: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var bob = false
-    @State private var now = Date()
-    /// 时钟气泡只在视图可见时更新（每分钟一跳，由 TimelineView 驱动，非 Timer）
+    @State private var angry = false
     private let bubbleFormat = MascotBubbleFormat()
 
-    // 毛毡质感配色（与 LogoSource 的棕毡小牛一致）
-    private let feltBody = Color(red: 0.76, green: 0.58, blue: 0.40)
-    private let feltDark = Color(red: 0.55, green: 0.38, blue: 0.24)
-    private let feltMuzzle = Color(red: 0.92, green: 0.84, blue: 0.74)
-    private let feltHorn = Color(red: 0.93, green: 0.88, blue: 0.76)
-    private let deskWood = Color(red: 0.62, green: 0.46, blue: 0.32)
-    private let screenGlow = Color(red: 0.55, green: 0.75, blue: 0.95)
-
     var body: some View {
-        if reduceMotion {
-            scene(animated: false)
-        } else {
-            scene(animated: true)
-        }
-    }
-
-    // MARK: 场景
-
-    private func scene(animated: Bool) -> some View {
         VStack(spacing: 0) {
-            timeBubble
+            bubble
                 .padding(.bottom, 4)
-                .zIndex(1)
-            ZStack {
-                desk
-                laptop
-                cow(animated: animated)
-            }
-            .frame(width: 132, height: 96)
+            cowView
         }
-        .onAppear {
-            guard animated else { return }
-            startAnimation()
-        }
-        .onChange(of: isBusy) { _, _ in
-            guard animated else { return }
-            startAnimation()
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { triggerAngry() }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(isBusy ? "小牛正在努力干活" : "小牛在工位上休息"))
+        .accessibilityLabel(Text(isBusy ? "小牛正在努力干活" : "小牛在工位上休息（点它试试）"))
     }
 
-    /// 时钟气泡：TimelineView 按分钟刷新（视图不可见时系统自动暂停，零轮询）。
+    // MARK: 牛（logo 真身）
+
+    private var cowView: some View {
+        Image(nsImage: Brand.headerImage)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 108, height: 108)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(
+                        angry ? Color(red: 0.9, green: 0.3, blue: 0.25).opacity(0.65) : Color.white.opacity(0.55),
+                        lineWidth: angry ? 2 : 1
+                    )
+            )
+            .shadow(color: angry ? Color(red: 0.9, green: 0.3, blue: 0.25).opacity(0.45) : .black.opacity(0.15),
+                    radius: angry ? 12 : 6, y: 3)
+            .overlay { angryFace }
+            .saturation(angry ? 1.25 : 1.0)
+            .hueRotation(.degrees(angry ? -12 : 0)) // 泛红的怒气滤镜
+            .scaleEffect(angry ? 1.06 : (bob ? 1.0 : 0.985))
+            .rotationEffect(.degrees(angry ? -3 : (bob ? 1.5 : -1.5)))
+            .animation(reduceMotion ? nil : (angry ? Motion.snappy : workAnimation), value: bob)
+            .animation(reduceMotion ? nil : Motion.snappy, value: angry)
+            .onAppear { startWork() }
+            .onChange(of: isBusy) { _, _ in startWork() }
+    }
+
+    private var workAnimation: Animation {
+        .easeInOut(duration: isBusy ? 0.32 : 0.95).repeatForever(autoreverses: true)
+    }
+
+    private func startWork() {
+        guard !reduceMotion else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { bob = false }
+        withAnimation(workAnimation) { bob = true }
+    }
+
+    /// 愤怒眉眼贴纸（叠在 logo 上）
+    private var angryFace: some View {
+        Group {
+            if angry {
+                HStack(spacing: 26) {
+                    angryEye
+                    angryEye
+                }
+                .padding(.top, 34)
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var angryEye: some View {
+        ZStack {
+            Text("╳")
+                .font(.system(size: 15, weight: .black))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(.white)
+                .frame(width: 16, height: 2.6)
+                .rotationEffect(.degrees(-24))
+                .offset(y: -11)
+                .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
+        }
+    }
+
+    // MARK: 气泡（时钟 / 愤怒）
+
+    @ViewBuilder
+    private var bubble: some View {
+        if angry {
+            angryBubble
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+        } else {
+            timeBubble
+                .transition(.opacity)
+        }
+    }
+
+    private var angryBubble: some View {
+        VStack(spacing: 2) {
+            Text("莫挨老子！😤")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+            Text("牛马愤怒")
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 7)
+        .background(
+            LinearGradient(colors: [Color(red: 0.95, green: 0.32, blue: 0.26),
+                                    Color(red: 0.82, green: 0.18, blue: 0.16)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.white.opacity(0.35), lineWidth: 1)
+        )
+        .shadow(color: Color(red: 0.9, green: 0.25, blue: 0.2).opacity(0.5), radius: 8, y: 3)
+        .overlay(alignment: .bottom) {
+            Triangle()
+                .fill(Color(red: 0.82, green: 0.18, blue: 0.16))
+                .frame(width: 10, height: 6)
+                .offset(y: 6)
+        }
+    }
+
     private var timeBubble: some View {
         TimelineView(.periodic(from: .now, by: 60)) { timeline in
             let date = timeline.date
@@ -73,232 +156,26 @@ struct MascotCow: View {
             .padding(.vertical, 7)
             .glassSurface(cornerRadius: 12, tint: GlassPalette.blue.opacity(0.08))
             .overlay(alignment: .bottom) {
-                // 气泡小尾巴
                 Triangle()
                     .fill(Color.primary.opacity(0.05))
                     .frame(width: 10, height: 6)
                     .offset(y: 6)
             }
             .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-            .transition(.scale.combined(with: .opacity))
-            .animation(reduceMotion ? nil : Motion.snappy, value: bubbleFormat.minuteKey(date))
             .help(bubbleFormat.full(date))
         }
     }
 
-    private func startAnimation() {
-        // 先无动画复位，再用新的节奏重新起循环；切换 busy 时平滑换挡。
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) { bob = false }
-        withAnimation(loop(base)) { bob = true }
-    }
+    // MARK: 愤怒触发（1 秒后自动消气）
 
-    private var base: TimeInterval { isBusy ? 0.30 : 1.05 }
-
-    private func loop(_ duration: TimeInterval) -> Animation {
-        .easeInOut(duration: duration)
-            .repeatForever(autoreverses: true)
-    }
-
-    // MARK: 打字交替相位（与 bob 同一驱动，天然同步）
-
-    private var hoofLift: CGFloat { bob ? 2.6 : 0 }
-
-    // MARK: 书桌与笔记本
-
-    private var desk: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            RoundedRectangle(cornerRadius: 3)
-                .fill(deskWood)
-                .frame(width: 126, height: 7)
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(deskWood.opacity(0.85))
-                .frame(width: 108, height: 4)
-                .offset(y: 2)
+    private func triggerAngry() {
+        guard !angry else { return }
+        angry = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.0))
+            angry = false
+            startWork()
         }
-        .frame(maxWidth: .infinity, alignment: .bottom)
-    }
-
-    private var laptop: some View {
-        ZStack {
-            // 屏幕
-            RoundedRectangle(cornerRadius: 3.5)
-                .fill(Color(white: 0.22))
-                .frame(width: 34, height: 22)
-                .overlay(
-                    VStack(alignment: .leading, spacing: 2.5) {
-                        codeLine(width: 18, delay: 0)
-                        codeLine(width: 24, delay: 0.15)
-                        codeLine(width: 12, delay: 0.30)
-                        codeLine(width: 21, delay: 0.45)
-                    }
-                    .padding(4),
-                    alignment: .topLeading
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 3.5)
-                        .strokeBorder(screenGlow.opacity(0.5), lineWidth: 1)
-                )
-                .shadow(color: screenGlow.opacity(0.35), radius: 4, y: 1)
-            // 键盘底座（微俯视梯形感）
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color(white: 0.30))
-                .frame(width: 42, height: 5)
-                .offset(y: 13)
-        }
-        .rotationEffect(.degrees(-6))
-        .position(x: 66, y: 58)
-    }
-
-    private func codeLine(width: CGFloat, delay: Double) -> some View {
-        Capsule()
-            .fill(screenGlow.opacity(bob ? 0.95 : 0.45))
-            .frame(width: width, height: 2.2)
-            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true).delay(delay),
-                       value: bob)
-    }
-
-    // MARK: 毛毡小牛
-
-    private func cow(animated: Bool) -> some View {
-        let bodyY: CGFloat = bob ? -1.8 : 1.2
-        let headTilt: Double = bob ? -2.4 : 2.2
-        let tailSwing: Double = bob ? 9 : -7
-
-        return ZStack {
-            // 尾巴
-            tail
-                .rotationEffect(.degrees(animated ? tailSwing : 4), anchor: .bottom)
-                .offset(x: -20, y: -16)
-
-            // 身体（伏案的前倾躯干）
-            Ellipse()
-                .fill(feltBody)
-                .frame(width: 46, height: 34)
-                .overlay(
-                    Ellipse().fill(feltDark)
-                        .frame(width: 13, height: 10)
-                        .offset(x: -8, y: -6)
-                )
-                .overlay(
-                    Ellipse().fill(feltDark)
-                        .frame(width: 10, height: 8)
-                        .offset(x: 10, y: 4)
-                )
-
-            // 蹄子搭在键盘上
-            hoof(left: true)
-                .offset(x: -9, y: 24 - (animated && bob ? hoofLift : 0))
-            hoof(left: false)
-                .offset(x: 9, y: 24 - (animated && !bob ? hoofLift : 0))
-
-            // 头
-            head(tilt: animated ? headTilt : 0)
-                .offset(x: 0, y: -22)
-        }
-        .frame(width: 80, height: 70)
-        .offset(y: bodyY)
-        .position(x: 62, y: 42)
-    }
-
-    private func hoof(left: Bool) -> some View {
-        Capsule()
-            .fill(feltDark)
-            .frame(width: 9, height: 13)
-            .overlay(
-                Capsule()
-                    .fill(feltMuzzle)
-                    .frame(width: 9, height: 4)
-                    .offset(y: 4)
-            )
-    }
-
-    private var tail: some View {
-        ZStack {
-            Capsule()
-                .fill(feltBody)
-                .frame(width: 4, height: 18)
-            Circle()
-                .fill(feltDark)
-                    .frame(width: 7, height: 7)
-                    .offset(y: -10)
-        }
-    }
-
-    private func head(tilt: Double) -> some View {
-        ZStack {
-            // 耳朵
-            ear.flip(false).offset(x: -19, y: -2)
-            ear.flip(true).offset(x: 19, y: -2)
-            // 牛角
-            horn.mirror(false).offset(x: -11, y: -16)
-            horn.mirror(true).offset(x: 11, y: -16)
-            // 脸
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(feltBody)
-                .frame(width: 40, height: 34)
-                .overlay(
-                    Ellipse().fill(feltDark)
-                        .frame(width: 9, height: 7)
-                        .offset(x: 12, y: -9)
-                )
-            // 口鼻
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(feltMuzzle)
-                .frame(width: 24, height: 15)
-                .offset(y: 8)
-                .overlay(
-                    HStack(spacing: 6) {
-                        Circle().fill(feltDark).frame(width: 3.4, height: 3.4)
-                        Circle().fill(feltDark).frame(width: 3.4, height: 3.4)
-                    }
-                    .offset(y: 8)
-                )
-            // 眼睛（专注盯着屏幕）
-            HStack(spacing: 12) {
-                eye
-                eye
-            }
-            .offset(y: -2)
-        }
-        .rotationEffect(.degrees(tilt), anchor: .bottom)
-    }
-
-    private var eye: some View {
-        ZStack {
-            Capsule().fill(Color(white: 0.12)).frame(width: 4.4, height: 5.4)
-            Circle().fill(.white).frame(width: 1.6, height: 1.6).offset(x: 0.8, y: -1)
-        }
-    }
-
-    private var ear: some View {
-        Ellipse()
-            .fill(feltBody)
-            .frame(width: 13, height: 9)
-            .overlay(
-                Ellipse().fill(feltMuzzle.opacity(0.7))
-                    .frame(width: 8, height: 5)
-            )
-    }
-
-    private var horn: some View {
-        Capsule()
-            .fill(feltHorn)
-            .frame(width: 4.5, height: 10)
-            .rotationEffect(.degrees(-18))
-    }
-}
-
-private extension View {
-    /// 左右镜像小工具：牛角/耳朵两侧对称。
-    func flip(_ flag: Bool) -> some View {
-        scaleEffect(x: flag ? -1 : 1, y: 1, anchor: .center)
-    }
-
-    func mirror(_ flag: Bool) -> some View {
-        flip(flag)
     }
 }
 
@@ -330,11 +207,6 @@ private struct MascotBubbleFormat {
     func weekdayAndDate(_ date: Date) -> String { weekdayAndDateFormatter.string(from: date) }
     func time(_ date: Date) -> String { timeFormatter.string(from: date) }
     func full(_ date: Date) -> String { fullFormatter.string(from: date) }
-
-    /// 分钟粒度的标识，驱动数字切换动画（每小时 60 跳）。
-    func minuteKey(_ date: Date) -> Int {
-        Calendar.current.component(.minute, from: date)
-    }
 }
 
 private struct Triangle: Shape {
