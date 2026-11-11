@@ -54,6 +54,10 @@ struct HistoryView: View {
                     .buttonStyle(.plain)
                 }
 
+                authorMenu
+
+                sortMenu
+
                 Toggle("全部分支", isOn: Binding(
                     get: { state.historyAllBranches },
                     set: { state.historyAllBranches = $0 }
@@ -73,6 +77,15 @@ struct HistoryView: View {
             .glassSurface(cornerRadius: 14)
 
             HStack(spacing: 8) {
+                if let author = state.historyAuthorFilter {
+                    HStack(spacing: 5) {
+                        StatusBadge(text: "作者：\(author)", tint: GlassPalette.violet)
+                        Button("清除") { state.toggleAuthorFilter(author) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10))
+                            .foregroundStyle(GlassPalette.violet)
+                    }
+                }
                 if state.needsDeepSearch {
                     InfoHint(text: "按文件、日期范围搜索需要扫描完整历史，点右侧「深度搜索」才会执行 git 查询。",
                              tint: GlassPalette.violet)
@@ -96,6 +109,77 @@ struct HistoryView: View {
 
     /// 行高与轨道列共用，保证节点与行内容严格对齐。
     static let rowHeight: CGFloat = 52
+
+    // MARK: 作者筛选菜单（从已加载提交提取，纯内存）
+
+    private var authorMenu: some View {
+        Menu {
+            ForEach(state.availableAuthors, id: \.name) { author in
+                Button {
+                    withComfortableAnimation(reduceMotion) {
+                        state.toggleAuthorFilter(author.name)
+                    }
+                } label: {
+                    HStack {
+                        Text(author.name)
+                        Text("\(author.count)").foregroundStyle(.secondary)
+                        if state.historyAuthorFilter == author.name {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 10.5, weight: .semibold))
+                Text(state.historyAuthorFilter ?? "作者")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .lineLimit(1)
+                    .frame(maxWidth: 90, alignment: .leading)
+                    .truncationMode(.middle)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .glassPill(tint: state.historyAuthorFilter != nil ? GlassPalette.violet.opacity(0.16) : nil, interactive: true)
+        .help("按提交人筛选（从已加载的提交中提取）")
+    }
+
+    // MARK: 排序菜单
+
+    private var sortMenu: some View {
+        Menu {
+            ForEach(HistorySort.allCases) { sort in
+                Button {
+                    withComfortableAnimation(reduceMotion) { state.historySort = sort }
+                } label: {
+                    HStack {
+                        Image(systemName: sort.symbol)
+                        Text(sort.rawValue)
+                        if state.historySort == sort {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 10.5, weight: .semibold))
+                Text(state.historySort.rawValue)
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .glassPill(interactive: true)
+        .help("排序方式（纯内存排序，立即生效）")
+    }
 
     @ViewBuilder
     private var historyList: some View {

@@ -340,3 +340,22 @@ public enum RefreshReason: String, Sendable {
     case afterMutation = "操作完成"
     case deepSearch = "深度搜索"
 }
+
+/// 历史页排序方式（纯内存排序，不触发 git）。
+public enum HistorySort: String, CaseIterable, Sendable, Identifiable {
+    case newestFirst = "时间 新→旧"
+    case oldestFirst = "时间 旧→新"
+    case authorAZ = "作者 A→Z"
+    case authorZA = "作者 Z→A"
+
+    public var id: String { rawValue }
+
+    public var symbol: String {
+        switch self {
+        case .newestFirst: return "arrow.down"
+        case .oldestFirst: return "arrow.up"
+        case .authorAZ: return "textformat.abc"
+        case .authorZA: return "textformat.abc.dottedunderline"
+        }
+    }
+}

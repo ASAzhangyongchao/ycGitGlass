@@ -34,6 +34,9 @@ public final class AppState {
     public var historyQuery = ""
     public var historyAllBranches = false
     public var deepSearchActive = false
+    /// 历史页：作者过滤与排序（纯内存，不触发 git）
+    public var historyAuthorFilter: String?
+    public var historySort: HistorySort = .newestFirst
     public var commitMessage = ""
     public var selectedFilePaths: Set<String> = []
     public var selectedCommit: Commit?
@@ -104,6 +107,26 @@ public final class AppState {
 
     /// 历史列表的即时过滤完全在内存完成，输入时零外部进程、零 CPU 尖峰。
     public var filteredCommits: [Commit] {
+        var result = baseFiltered
+        // 作者筛选（作者菜单选择）
+        if let author = historyAuthorFilter, !author.isEmpty {
+            result = result.filter { $0.author == author }
+        }
+        // 排序
+        switch historySort {
+        case .newestFirst:
+            break // git log 默认已是时间倒序，保持轨道图语义
+        case .oldestFirst:
+            result = result.reversed()
+        case .authorAZ:
+            result.sort { $0.author.localizedCaseInsensitiveCompare($1.author) == .orderedAscending }
+        case .authorZA:
+            result.sort { $0.author.localizedCaseInsensitiveCompare($1.author) == .orderedDescending }
+        }
+        return result
+    }
+
+    private var baseFiltered: [Commit] {
         let query = historyQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if deepSearchActive || query.isEmpty { return commits }
         let (key, value) = Self.parseLocalQuery(query)
@@ -122,6 +145,23 @@ public final class AppState {
         default:
             return commits.filter { $0.searchableText.lowercased().contains(needle) }
         }
+    }
+
+    /// 已加载提交中的作者列表（去重，按提交数降序），供作者筛选菜单。
+    public var availableAuthors: [(name: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for commit in commits where !commit.author.isEmpty {
+            counts[commit.author, default: 0] += 1
+        }
+        return counts
+            .map { (name: $0.key, count: $0.value) }
+            .sorted { $0.count == $1.count
+                ? $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                : $0.count > $1.count }
+    }
+
+    public func toggleAuthorFilter(_ name: String) {
+        historyAuthorFilter = historyAuthorFilter == name ? nil : name
     }
 
     public var needsDeepSearch: Bool {

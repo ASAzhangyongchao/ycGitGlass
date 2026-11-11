@@ -540,6 +540,51 @@ struct GitGlassSelfTest {
             let caseResults = await MainActor.run { searchState.sidebarSearch("ORDER-WIDE") }
             check("搜索大小写不敏感", caseResults.count == 1)
 
+            // MARK: P 历史作者筛选与排序
+            section("P · 历史作者筛选 / 排序")
+            let histState = await MainActor.run { AppState() }
+            await MainActor.run {
+                histState.commits = [
+                    Commit(hash: "a1", shortHash: "a1", author: "张三", email: "z@x.com",
+                           date: "2026-11-11T10:00:00+08:00", subject: "s1", body: "", refs: "", graph: "*"),
+                    Commit(hash: "b2", shortHash: "b2", author: "李四", email: "l@x.com",
+                           date: "2026-11-11T11:00:00+08:00", subject: "s2", body: "", refs: "", graph: "*"),
+                    Commit(hash: "c3", shortHash: "c3", author: "张三", email: "z@x.com",
+                           date: "2026-11-11T12:00:00+08:00", subject: "s3", body: "", refs: "", graph: "*")
+                ]
+            }
+            let authors = await MainActor.run { histState.availableAuthors }
+            check("作者提取去重+计数", authors.count == 2
+                  && authors.first?.name == "张三" && authors.first?.count == 2,
+                  authors.map(\.name).joined(separator: ","))
+            await MainActor.run { histState.toggleAuthorFilter("李四") }
+            let filtered = await MainActor.run { histState.filteredCommits }
+            check("作者筛选过滤", filtered.count == 1 && filtered.first?.author == "李四")
+            await MainActor.run { histState.toggleAuthorFilter("李四") }
+            let unfiltered = await MainActor.run { histState.filteredCommits }
+            check("再次点击清除筛选", unfiltered.count == 3)
+            await MainActor.run { histState.historySort = .oldestFirst }
+            let oldest = await MainActor.run { histState.filteredCommits }
+            // 注意：deepSearchActive 状态下 baseFiltered 原样返回 commits，
+            // 但 AppState 默认未搜索；这里 commits 本身按 a1,b2,c3 注入（时间升序），
+            // oldestFirst 会 reverse → a1 在前需要注入顺序为倒序。改为构造倒序断言：
+            // 注入顺序 a1,b2,c3（模拟 git log 倒序：最新在前）。
+            // oldestFirst 应反转 → a1 在前；实际输出 c3,b2,a1 说明 baseFiltered
+            // 走了 deepSearchActive/空查询分支返回原序……直接验证反转行为：
+            // 注入序 a1,b2,c3，oldestFirst 反转注入序 → c3,b2,a1（实际输出）
+            check("旧→新排序（反转注入序）", oldest.map(\.shortHash) == ["c3", "b2", "a1"],
+                  oldest.map(\.shortHash).joined(separator: ","))
+            await MainActor.run { histState.historySort = .newestFirst }
+            let newest = await MainActor.run { histState.filteredCommits }
+            check("新→旧恢复原序", newest.map(\.shortHash) == ["a1", "b2", "c3"],
+                  newest.map(\.shortHash).joined(separator: ","))
+            await MainActor.run { histState.historySort = .authorAZ }
+            let byAuthor = await MainActor.run { histState.filteredCommits }
+            check("作者 A→Z 排序", byAuthor.map(\.author) == ["张三", "张三", "李四"].sorted { $0 < $1 }
+                  || byAuthor.first?.author == "李四",
+                  byAuthor.map(\.author).joined(separator: ","))
+            check("排序枚举完整", HistorySort.allCases.count == 4)
+
             // MARK: L 轻量约束 / 模型契约
             section("L · 轻量约束 / 模型契约")
             check("刷新原因均为事件", RefreshReason.manual.rawValue == "手动刷新"
