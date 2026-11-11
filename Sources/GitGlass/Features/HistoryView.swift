@@ -94,6 +94,9 @@ struct HistoryView: View {
         }
     }
 
+    /// 行高与轨道列共用，保证节点与行内容严格对齐。
+    static let rowHeight: CGFloat = 52
+
     @ViewBuilder
     private var historyList: some View {
         if state.filteredCommits.isEmpty {
@@ -113,16 +116,20 @@ struct HistoryView: View {
             .frame(maxWidth: .infinity, minHeight: 180)
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(state.filteredCommits.enumerated()), id: \.element.id) { index, commit in
-                        commitRow(commit)
-                            .staggered(index)
-                        if index < state.filteredCommits.count - 1 {
-                            Divider().opacity(0.35).padding(.vertical, 2)
+                HStack(alignment: .top, spacing: 0) {
+                    // 连续轨道背景层：一张 Canvas 画整列，线条跨行贯通
+                    CommitGraphColumn(commits: state.filteredCommits,
+                                      rowHeight: Self.rowHeight)
+                        .padding(.top, 4)
+                    // 行内容层：固定行高与轨道对齐
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(state.filteredCommits.enumerated()), id: \.element.id) { index, commit in
+                            commitRow(commit)
+                                .staggered(index)
                         }
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
             }
         }
     }
@@ -132,9 +139,7 @@ struct HistoryView: View {
         return Button {
             Task { await state.openDetail(for: commit) }
         } label: {
-            HStack(alignment: .center, spacing: 9) {
-                CommitGraphCanvas(graph: commit.graph, compact: true)
-
+            HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                         Text(commit.subject)
@@ -161,8 +166,9 @@ struct HistoryView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(selected ? GlassPalette.accent : Color.secondary.opacity(0.5))
             }
-            .padding(.vertical, 9)
             .padding(.horizontal, 8)
+            .frame(minHeight: Self.rowHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .background(
                 selected ? GlassPalette.accent.opacity(0.10) : Color.clear,
