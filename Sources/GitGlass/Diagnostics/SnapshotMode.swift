@@ -14,6 +14,7 @@ enum SnapshotMode {
         let out = args[index + 1]
         let width: CGFloat = args.count > index + 3 ? CGFloat(Int(args[index + 2]) ?? 1100) : 1100
         let height: CGFloat = args.count > index + 3 ? CGFloat(Int(args[index + 3]) ?? 700) : 700
+        let page = args.count > index + 4 ? args[index + 4] : "history"
 
         let state = AppState()
         let repo = Repository(id: UUID(), name: "GitGlass", path: "/tmp/xx")
@@ -22,6 +23,12 @@ enum SnapshotMode {
         var status = WorktreeStatus.empty
         status.branch = "main"
         state.status = status
+        var status2 = state.status
+        status2.files = [
+            FileChange(path: "Sources/App.swift", indexStatus: "M", worktreeStatus: " "),
+            FileChange(path: "docs/说明.md", indexStatus: "?", worktreeStatus: "?")
+        ]
+        state.status = status2
         var commits: [Commit] = []
         for index in 0..<30 {
             commits.append(Commit(
@@ -45,7 +52,14 @@ enum SnapshotMode {
             changedFiles: [], insertions: 10, deletions: 2, fileCount: 0)
 
         _ = NSApplication.shared
-        let host = NSHostingView(rootView: HistoryView().environment(state))
+        let content: AnyView = {
+            switch page {
+            case "dashboard": return AnyView(DashboardView().environment(state))
+            case "commit": return AnyView(CommitView().environment(state))
+            default: return AnyView(HistoryView().environment(state))
+            }
+        }()
+        let host = NSHostingView(rootView: content)
         host.frame = NSRect(x: 0, y: 0, width: width, height: height)
         host.layoutSubtreeIfNeeded()
         host.layoutSubtreeIfNeeded()
