@@ -50,28 +50,35 @@ struct GitGlassApp: App {
         }
 
         // 屏幕顶部菜单栏常驻入口：关掉主窗口也能快速刷新 / 同步。
-        MenuBarExtra(LocalizedStringKey(Brand.name),
-                     systemImage: "chevron.left.forwardslash.chevron.right") {
-            Text(state.currentRepository?.name ?? "未选择仓库")
-            Text("\(state.status.files.count) 个改动 · \(state.status.branch.isEmpty ? "—" : state.status.branch)")
-            Divider()
-            Button("打开主窗口") {
-                if let window = NSApp.windows.first(where: { $0.title.contains(Brand.name) }) {
-                    window.makeKeyAndOrderFront(nil)
-                }
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            Button("手动刷新") { Task { await state.refresh(reason: .manual) } }
-                .disabled(state.currentRepository == nil)
-            Button("拉取") { Task { await state.pull() } }
-                .disabled(state.currentRepository == nil)
-            Button("推送") { Task { await state.push() } }
-                .disabled(state.currentRepository == nil)
-            Divider()
-            Button("关于 / 检查更新") { state.openAbout() }
-            Divider()
-            Button("退出 码牛") { NSApp.terminate(nil) }
+        // label 用模板小牛图（自动跟随菜单栏明暗），title 留给无障碍朗读。
+        MenuBarExtra {
+            menuBarContent
+        } label: {
+            Image(nsImage: Brand.menuCowImage)
         }
         .menuBarExtraStyle(.menu)
+    }
+
+    @ViewBuilder
+    private var menuBarContent: some View {
+        Text(state.currentRepository?.name ?? "未选择仓库")
+        Text("\(state.status.files.count) 个改动 · \(state.status.branch.isEmpty ? "—" : state.status.branch)")
+        Divider()
+        Button("打开主窗口") {
+            if let window = NSApp.windows.first(where: { $0.title.contains(Brand.name) }) {
+                window.makeKeyAndOrderFront(nil)
+            }
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        Button("手动刷新") { Task { await state.refresh(reason: .manual) } }
+            .disabled(state.currentRepository == nil)
+        Button("拉取") { Task { await state.pull() } }
+            .disabled(state.currentRepository == nil)
+        Button("推送") { Task { await state.push() } }
+            .disabled(state.currentRepository == nil)
+        Divider()
+        Button("关于 / 检查更新") { state.openAbout() }
+        Divider()
+        Button("退出 码牛") { NSApp.terminate(nil) }
     }
 }

@@ -31,6 +31,9 @@ if [[ ! -f "$ROOT/Resources/AppIcon.icns" || ! -f "$ROOT/Resources/BrandHeader.p
 fi
 cp -f "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp -f "$ROOT/Resources/BrandHeader.png" "$APP/Contents/Resources/BrandHeader.png"
+if [[ -f "$ROOT/Resources/MenuCowTemplate.png" ]]; then
+  cp -f "$ROOT/Resources/MenuCowTemplate.png" "$APP/Contents/Resources/MenuCowTemplate.png"
+fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 chmod +x "$APP/Contents/MacOS/GitGlass"
 

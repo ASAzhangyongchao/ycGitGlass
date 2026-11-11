@@ -4,11 +4,15 @@ import GitCore
 /// 侧边栏左下角吉祥物：毛毡小牛伏案敲键盘，丝滑无缝循环。
 /// - 空闲：缓慢轻轻起伏（呼吸感）
 /// - isBusy：加速打字（蹄子交替 + 头部快频点头）
+/// - 头顶玻璃气泡显示日期 / 时间 / 星期
 /// - 系统开启「减弱动态效果」时保持静态姿势，不产生任何动画
 struct MascotCow: View {
     var isBusy: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var bob = false
+    @State private var now = Date()
+    /// 时钟气泡只在视图可见时更新（每分钟一跳，由 TimelineView 驱动，非 Timer）
+    private let bubbleFormat = MascotBubbleFormat()
 
     // 毛毡质感配色（与 LogoSource 的棕毡小牛一致）
     private let feltBody = Color(red: 0.76, green: 0.58, blue: 0.40)
@@ -29,12 +33,17 @@ struct MascotCow: View {
     // MARK: 场景
 
     private func scene(animated: Bool) -> some View {
-        ZStack {
-            desk
-            laptop
-            cow(animated: animated)
+        VStack(spacing: 0) {
+            timeBubble
+                .padding(.bottom, 4)
+                .zIndex(1)
+            ZStack {
+                desk
+                laptop
+                cow(animated: animated)
+            }
+            .frame(width: 132, height: 96)
         }
-        .frame(width: 132, height: 96)
         .onAppear {
             guard animated else { return }
             startAnimation()
@@ -43,7 +52,38 @@ struct MascotCow: View {
             guard animated else { return }
             startAnimation()
         }
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(isBusy ? "小牛正在努力干活" : "小牛在工位上休息"))
+    }
+
+    /// 时钟气泡：TimelineView 按分钟刷新（视图不可见时系统自动暂停，零轮询）。
+    private var timeBubble: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            let date = timeline.date
+            VStack(spacing: 2) {
+                Text(bubbleFormat.weekdayAndDate(date))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(bubbleFormat.time(date))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .glassSurface(cornerRadius: 12, tint: GlassPalette.blue.opacity(0.08))
+            .overlay(alignment: .bottom) {
+                // 气泡小尾巴
+                Triangle()
+                    .fill(Color.primary.opacity(0.05))
+                    .frame(width: 10, height: 6)
+                    .offset(y: 6)
+            }
+            .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+            .transition(.scale.combined(with: .opacity))
+            .animation(reduceMotion ? nil : Motion.snappy, value: bubbleFormat.minuteKey(date))
+            .help(bubbleFormat.full(date))
+        }
     }
 
     private func startAnimation() {
@@ -259,5 +299,51 @@ private extension View {
 
     func mirror(_ flag: Bool) -> some View {
         flip(flag)
+    }
+}
+
+// MARK: - 气泡文案格式
+
+/// 时钟气泡的日期时间格式化（缓存 formatter，避免每分钟重建）。
+private struct MascotBubbleFormat {
+    private let weekdayAndDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日 EEEE"
+        return formatter
+    }()
+
+    private let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    private let fullFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 EEEE HH:mm"
+        return formatter
+    }()
+
+    func weekdayAndDate(_ date: Date) -> String { weekdayAndDateFormatter.string(from: date) }
+    func time(_ date: Date) -> String { timeFormatter.string(from: date) }
+    func full(_ date: Date) -> String { fullFormatter.string(from: date) }
+
+    /// 分钟粒度的标识，驱动数字切换动画（每小时 60 跳）。
+    func minuteKey(_ date: Date) -> Int {
+        Calendar.current.component(.minute, from: date)
+    }
+}
+
+private struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }

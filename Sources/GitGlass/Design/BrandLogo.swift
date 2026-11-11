@@ -22,6 +22,18 @@ enum Brand {
         return NSImage(systemSymbolName: "chevron.left.forwardslash.chevron.right",
                        accessibilityDescription: nil) ?? NSImage()
     }
+
+    /// 菜单栏迷你小牛（模板图：自动跟随菜单栏明暗，单色镂空）。
+    static var menuCowImage: NSImage {
+        if let url = Bundle.main.url(forResource: "MenuCowTemplate", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            image.isTemplate = true
+            return image
+        }
+        // 兜底：SF Symbol（非 .app 环境运行时）
+        return NSImage(systemSymbolName: "chevron.left.forwardslash.chevron.right",
+                       accessibilityDescription: nil) ?? NSImage()
+    }
 }
 
 /// 窗口顶部紧凑品牌行：小 logo + 名称（点开「关于」）+ 当前仓库/分支胶囊 + 更新状态点。
