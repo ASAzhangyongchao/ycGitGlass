@@ -13,12 +13,10 @@ struct SidebarView: View {
             Divider().padding(.vertical, 10)
             actionButtons
             Spacer(minLength: 12)
-            InfoHint(
-                text: "不会后台轮询。点右上角「刷新」、切换仓库或分支时才重新读取，空闲时零 CPU。",
-                tint: GlassPalette.mint,
-                icon: "bolt.horizontal.fill"
-            )
-            .padding(.bottom, 16)
+            // 吉祥物：空闲时慢悠悠起伏，有任务时加速打字
+            MascotCow(isBusy: state.isBusy)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 10)
         }
         .padding(.horizontal, 14)
         .padding(.top, 18)

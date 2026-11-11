@@ -46,12 +46,18 @@ struct DashboardView: View {
         }
     }
 
+    /// 问候语只做情绪与状态判断，不复述具体数字（数字由下方统计块唯一呈现）。
     private var summary: String {
         guard let repo = state.currentRepository else { return "开始管理你的 Git 仓库" }
-        if state.status.isClean {
-            return "\(repo.name) 很干净，没有待提交的改动"
+        if state.inProgressOperation != nil {
+            return "\(repo.name) 有操作待处理，先解决再继续"
         }
-        return "\(repo.name) 有 \(state.status.files.count) 个改动，\(state.status.stagedCount) 个已暂存"
+        if state.status.isClean {
+            return "\(repo.name) 一切干净，随时可以开始"
+        }
+        return state.status.stagedCount > 0
+            ? "\(repo.name) 已备好一批改动，可以提交了"
+            : "\(repo.name) 有新改动，看看要不要暂存"
     }
 
     private var stats: some View {
@@ -107,17 +113,7 @@ struct DashboardView: View {
                 actionRow(number: "3", title: "一键提交全部并推送", caption: "自动暂存所有改动并生成简洁说明", icon: "paperplane.fill") {
                     Task { await state.quickCommitAll() }
                 }
-                Divider().padding(.vertical, 2)
-                HStack(spacing: 8) {
-                    ActionButton(title: "手动刷新", icon: "arrow.clockwise") {
-                        Task { await state.refresh(reason: .manual) }
-                    }
-                    .disabled(state.isBusy)
-                    ActionButton(title: "查看历史", icon: "clock.arrow.circlepath") {
-                        withComfortableAnimation(reduceMotion) { state.selectedTab = .history }
-                    }
-                }
-                .disabled(state.isBusy)
+                // 说明：刷新按钮在顶栏（⌘R）、历史在页签（⌘3），这里不再重复放一份。
             }
         }
         .frame(maxWidth: .infinity)
