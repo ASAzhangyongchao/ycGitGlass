@@ -66,7 +66,6 @@ struct BrandHeader: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    }
                 }
                 .contentShape(Rectangle())
             }
