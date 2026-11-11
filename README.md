@@ -154,6 +154,8 @@ CHANGELOG.md / CONTRIBUTING.md / LICENSE
 
 ## 10. 在 GitHub 上维护
 
+仓库地址：**https://github.com/ASAzhangyongchao/ycGitGlass**（默认分支 `main`）。
+
 仓库采用 `main` 受保护分支 + PR 流程，贡献前先读 `CONTRIBUTING.md`。
 
 | 机制 | 文件 | 作用 |

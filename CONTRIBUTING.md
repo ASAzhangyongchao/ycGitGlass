@@ -12,8 +12,8 @@
 | 外部命令 | 系统 `git`、`ssh-keygen`、`ssh`、`iconutil` |
 
 ```bash
-git clone <仓库地址>
-cd GitGlass
+git clone https://github.com/ASAzhangyongchao/ycGitGlass.git
+cd ycGitGlass
 swift build
 swift run GitGlassSelfTest
 ```
