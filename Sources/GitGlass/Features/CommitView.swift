@@ -68,6 +68,7 @@ struct CommitView: View {
                     Spacer(minLength: 0)
                 }
 
+                // 暂存操作一行；提交动作独立一行——避免窄窗口 6 个按钮挤成一团
                 HStack(spacing: 8) {
                     ActionButton(title: "暂存所选 (\(state.selectedFilePaths.count))", icon: "plus.circle") {
                         Task { await state.stageSelected() }
@@ -85,6 +86,15 @@ struct CommitView: View {
                     .disabled(state.status.isClean || state.isBusy)
 
                     Spacer(minLength: 0)
+                }
+
+                HStack(spacing: 8) {
+                    if state.status.stagedCount == 0 {
+                        Text("先勾选文件暂存，提交按钮才会亮")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer(minLength: 0)
 
                     ActionButton(title: "提交", icon: "arrow.up.doc", prominent: true,
                                  disabled: !canCommit) {
@@ -97,9 +107,6 @@ struct CommitView: View {
                         Task { await state.commit(andPush: true) }
                     }
                     .help("提交后自动推送；首次推送会建立上游关联")
-                }
-                if state.status.stagedCount == 0 {
-                    InfoHint(text: "还没有已暂存的文件。先勾选文件并点「暂存所选」，提交按钮才会可用。")
                 }
             }
         }

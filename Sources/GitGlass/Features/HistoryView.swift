@@ -34,10 +34,13 @@ struct HistoryView: View {
     }
 
     private var searchBar: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("搜索说明 / 作者 / hash，或用 author: message: file: hash: since:", text: Binding(
+        VStack(alignment: .leading, spacing: 8) {
+            // 第一行：纯搜索（给输入框最大空间）
+            HStack(spacing: 9) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                TextField("搜索提交说明 / 作者 / hash，支持 author: file: since: 前缀", text: Binding(
                     get: { state.historyQuery },
                     set: { state.historyQuery = $0 }
                 ))
@@ -52,10 +55,16 @@ struct HistoryView: View {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .help("清空搜索")
                 }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .glassSurface(cornerRadius: 12)
 
+            // 第二行：筛选工具条（作者/排序/范围/深搜 + 结果统计）
+            HStack(spacing: 7) {
                 authorMenu
-
                 sortMenu
 
                 Toggle("全部分支", isOn: Binding(
@@ -63,19 +72,27 @@ struct HistoryView: View {
                     set: { state.historyAllBranches = $0 }
                 ))
                 .toggleStyle(.checkbox)
-                .font(.system(size: 11.5))
+                .font(.system(size: 11))
                 .onChange(of: state.historyAllBranches) { _, _ in
                     Task { await state.refresh(reason: .manual) }
                 }
 
-                ActionButton(title: "深度搜索", icon: "sparkle.magnifyingglass", prominent: true) {
+                Spacer(minLength: 8)
+
+                Text("\(state.filteredCommits.count) / \(state.commits.count) 条")
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .help("筛选后 / 已加载的提交数")
+
+                ActionButton(title: "深度搜索", icon: "sparkle.magnifyingglass") {
                     Task { await state.deepSearch() }
                 }
                 .disabled(state.isBusy || state.historyQuery.isEmpty)
+                .help("扫描完整历史（按文件、日期范围搜索时需要）")
             }
-            .padding(12)
-            .glassSurface(cornerRadius: 14)
+            .padding(.horizontal, 4)
 
+            // 第三行：状态说明（有筛选时才占位，避免空提示常驻）
             HStack(spacing: 8) {
                 if let author = state.historyAuthorFilter {
                     HStack(spacing: 5) {
@@ -87,23 +104,23 @@ struct HistoryView: View {
                     }
                 }
                 if state.needsDeepSearch {
-                    InfoHint(text: "按文件、日期范围搜索需要扫描完整历史，点右侧「深度搜索」才会执行 git 查询。",
-                             tint: GlassPalette.violet)
-                } else {
-                    Text("输入时即时过滤已加载的 \(state.commits.count) 条记录，不产生任何 git 命令。")
-                        .font(.system(size: 10.5))
+                    Text("按文件 / 日期搜索需点「深度搜索」执行 git 查询")
+                        .font(.system(size: 10))
+                        .foregroundStyle(GlassPalette.violet.opacity(0.9))
+                } else if state.historyQuery.isEmpty && state.historyAuthorFilter == nil {
+                    Text("彩色轨道 = 分支 / 合并关系 · 输入即时过滤，零 git 命令")
+                        .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 5) {
                     ForEach(GlassPalette.lanes.prefix(4), id: \.self) { color in
-                        Circle().fill(color.opacity(0.85)).frame(width: 5, height: 5)
+                        Circle().fill(color.opacity(0.85)).frame(width: 4.5, height: 4.5)
                     }
-                    Text("彩色轨道 = 分支 / 合并关系")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
                 }
+                .opacity(state.historyQuery.isEmpty && state.historyAuthorFilter == nil ? 1 : 0)
             }
+            .padding(.horizontal, 4)
         }
     }
 
