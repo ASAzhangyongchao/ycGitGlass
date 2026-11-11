@@ -1,7 +1,11 @@
-# GitGlass · 轻 Git
+# 码牛 MooGit
 
 一个 macOS 26 原生 Git 桌面客户端：提交简洁、历史清晰、远程源与多平台 SSH 密钥集中维护。
 用系统 SwiftUI 的 Liquid Glass 构建，**零第三方依赖、零 WebView、零后台轮询**。
+
+> 产品名 **「码牛 MooGit」**（码 = 代码，牛 = 应用形象，Moo = 牛叫 + Git）。工程 / 仓库标识、可执行文件名、bundle id 仍沿用 `GitGlass`，避免迁移时影响已有配置目录。应用图标与窗口页头使用 `Resources/LogoSource.jpg` 生成，屏幕顶部菜单栏有常驻入口。
+
+**名字备选**：`码牛 MooGit`（主推，短、好记、菜单栏只占两字）｜`Git 牛`｜`牧码`｜`毡 Git`｜`牛码`。想换名字只需改 `Sources/GitGlass/Design/BrandLogo.swift` 的 `Brand` 常量与 `Resources/Info.plist` 的 `CFBundleName` / `CFBundleDisplayName`。
 
 ---
 
@@ -12,7 +16,8 @@
 | 可直接运行的应用 | `GitGlass.app` | arm64 原生、ad-hoc 签名，约 3.5 MB |
 | 完整源码 | `Sources/` | Swift 6.2，20+ 个文件，按功能分层 |
 | 工程清单 | `Package.swift` | SwiftPM，可在任意 Mac 上重建 |
-| 应用配置 | `Resources/Info.plist` | 版本 1.1.0，最低 macOS 26.0 |
+| 应用配置 | `Resources/Info.plist` | 产品名「码牛 MooGit」，版本 1.2.0，最低 macOS 26.0 |
+| 品牌资源 | `Resources/LogoSource.jpg` / `AppIcon.icns` / `BrandHeader.png` | 应用图标、Dock 图标与窗口页头图标 |
 | 脚本 | `scripts/` | `build-app.sh` 打包应用、`package.sh` 生成分发 zip |
 | 文档 | `README.md`、`docs/` | 本文件 + 完整操作手册（Markdown / HTML） |
 
@@ -49,7 +54,7 @@ open /Applications/GitGlass.app
 
 ```bash
 # 1. 把整个解压目录拷过去（必须包含 Sources/ 和 Package.swift）
-cd GitGlass-1.1.0-macOS26
+cd GitGlass-1.2.0-macOS26
 
 # 2. 准备编译工具（若已有 Xcode 26 可跳过）
 xcode-select --install
@@ -69,6 +74,18 @@ open dist/GitGlass.app
 ```bash
 swift run --disable-sandbox GitGlassSelfTest   # 服务层深度自检，应输出 129 通过 / 0 失败
 ```
+
+### 3.4 安装后你会看到
+
+| 位置 | 内容 |
+|---|---|
+| Dock / 访达 | 毛毡小牛图标，悬停提示「码牛」 |
+| 屏幕顶部菜单栏左侧 | 应用菜单「码牛」（含「关于 码牛 MooGit」与 Git 菜单） |
+| 屏幕顶部菜单栏右侧 | 常驻的分支小图标，点开显示当前仓库与改动数，可直接刷新 / 拉取 / 推送 / 退出；关掉主窗口也保留 |
+| 主窗口页头 | 玻璃品牌条：小牛 logo + 「码牛 MooGit」+ 版本 + 当前仓库 / 分支 |
+| 窗口标题栏 | 「码牛 MooGit」 |
+
+> 若 Dock 图标仍是旧的，右键退出应用后重新打开；macOS 偶尔会缓存图标，必要时执行 `killall Dock` 或重新登录。
 
 ## 4. 三步上手
 
@@ -93,7 +110,8 @@ swift run --disable-sandbox GitGlassSelfTest   # 服务层深度自检，应输�
 |---|---|
 | `./scripts/build-app.sh` | Release 编译并组装 `.app` |
 | `./scripts/package.sh` | 生成含源码 + 应用 + 文档的分发 zip |
-| `swift scripts/make-icon.swift` | 重新生成本地玻璃风格应用图标（`Resources/AppIcon.icns`） |
+| `swift scripts/make-brand-assets.swift` | 从 `Resources/LogoSource.jpg` 重新生成应用图标与页头图（`AppIcon.icns` / `BrandHeader.png`） |
+| `swift scripts/make-icon.swift` | 无源图时的程序化图标兜底 |
 | `./scripts/release.sh v1.2.0` | 校验版本与自检后打 tag，触发 CI 自动发布 Release |
 | `swift build --disable-sandbox` | Debug 编译（0 error / 0 warning） |
 | `swift run --disable-sandbox GitGlassSelfTest` | 真实临时仓库上的 129 项自检 |

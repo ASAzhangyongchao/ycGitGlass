@@ -12,6 +12,24 @@
 - 应用图标的多风格切换、Apple 公证与签名发布
 - SSH 密钥的硬件密钥（sk-ssh-ed25519）与 ssh-agent 状态显示
 
+## [1.2.0] - 2026-11-11
+
+品牌与系统级存在感版本。
+
+### Added
+
+- 产品正式命名 **「码牛 MooGit」**（工程 / 仓库标识仍为 `GitGlass`，避免影响已有配置目录）。
+- 应用图标与 Dock 图标改用用户提供的毛毡小牛插画：`scripts/make-brand-assets.swift` 自动裁掉右下角水印、做 macOS 圆角，生成 `AppIcon.icns` 与页头 `BrandHeader.png`；`make-icon.swift` 保留为无源图时的程序化兜底。
+- **屏幕顶部菜单栏常驻入口**（SwiftUI `MenuBarExtra`）：显示当前仓库与改动数，可打开主窗口、手动刷新、拉取、推送、退出；关掉主窗口仍常驻。
+- 应用菜单「关于 码牛 MooGit」、窗口标题「码牛 MooGit」。
+- 窗口玻璃品牌页头：小牛 logo + 名称 + 版本徽标 + 当前仓库 / 分支胶囊。
+
+### Changed
+
+- `Info.plist`：`CFBundleName` = 码牛、`CFBundleDisplayName` = 码牛 MooGit、版本 1.2.0（build 3）。
+- 分发包版本升为 1.2.0；README、Markdown / HTML 手册、Issue 模板、推送脚本同步。
+- 自检输出标题更新为「码牛 MooGit 深度自检 v1.2.0」。
+
 ## [1.1.0] - 2026-11-11
 
 首个可分发版本，同时建立 GitHub 维护基线。

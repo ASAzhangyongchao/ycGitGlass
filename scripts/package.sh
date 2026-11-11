@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="1.1.0"
+VERSION="1.2.0"
 # 顶层目录与包名保持 ASCII，避免其它解压工具对中文条目名乱码
 NAME="GitGlass-${VERSION}-macOS26"
 OUT="$ROOT/dist/${NAME}.zip"

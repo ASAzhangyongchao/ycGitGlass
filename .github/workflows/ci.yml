@@ -59,6 +59,8 @@ jobs:
         run: |
           test -x dist/GitGlass.app/Contents/MacOS/GitGlass
           test -f dist/GitGlass.app/Contents/Resources/AppIcon.icns
+          test -f dist/GitGlass.app/Contents/Resources/BrandHeader.png
+          test "$(plutil -extract CFBundleName raw dist/GitGlass.app/Contents/Info.plist)" = "码牛"
           plutil -lint dist/GitGlass.app/Contents/Info.plist
           lipo -info dist/GitGlass.app/Contents/MacOS/GitGlass
 

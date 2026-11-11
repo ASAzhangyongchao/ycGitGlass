@@ -32,4 +32,4 @@ fi
 echo "==> 推送到 $URL"
 git push -u origin main
 echo "完成：https://github.com/${REPO}"
-echo "推送 v1.1.0 tag 可触发自动 Release：git tag -a v1.1.0 -m 'Release v1.1.0' && git push origin v1.1.0"
+echo "推送 v1.2.0 tag 可触发自动 Release：git tag -a v1.2.0 -m 'Release v1.2.0' && git push origin v1.2.0"

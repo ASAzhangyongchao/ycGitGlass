@@ -2,7 +2,8 @@ import Foundation
 
 /// 集中配置：所有外部依赖路径与平台预设在此一处定义，启动时统一校验、快速失败。
 public enum AppConfig {
-    public static let appName = "GitGlass"
+    /// 面向用户的产品名；工程 / bundle 标识仍保持 GitGlass 以兼容已有配置目录。
+    public static let appName = "码牛 MooGit"
     public static let bundleIdentifier = "com.gitglass.app"
     public static let logSubsystem = "com.gitglass.app"
     public static let configBlockBegin = "# >>> GitGlass managed >>>"

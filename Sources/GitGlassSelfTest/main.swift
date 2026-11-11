@@ -20,7 +20,7 @@ struct GitGlassSelfTest {
 
         func section(_ title: String) { print("\n▸ \(title)") }
 
-        print("GitGlass 深度自检 v1.1")
+        print("码牛 MooGit 深度自检 v1.2.0")
 
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("gitglass-selftest-\(UUID().uuidString)")

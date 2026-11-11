@@ -7,7 +7,7 @@ struct GitGlassApp: App {
     @State private var state = AppState()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(Brand.fullName) {
             RootView()
                 .environment(state)
                 // 系统「降低透明度」开启时，玻璃自动退化为不透明卡片。
@@ -15,8 +15,13 @@ struct GitGlassApp: App {
                              NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)
         }
         .windowStyle(.titleBar)
-        .defaultSize(width: 1180, height: 780)
+        .defaultSize(width: 1180, height: 810)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("关于 码牛 MooGit") {
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                }
+            }
             CommandMenu("Git") {
                 Button("手动刷新") { Task { await state.refresh(reason: .manual) } }
                     .keyboardShortcut("r", modifiers: [.command])
@@ -41,5 +46,28 @@ struct GitGlassApp: App {
                     .keyboardShortcut("6", modifiers: [.command])
             }
         }
+
+        // 屏幕顶部菜单栏常驻入口：关掉主窗口也能快速刷新 / 同步。
+        MenuBarExtra(LocalizedStringKey(Brand.name),
+                     systemImage: "chevron.left.forwardslash.chevron.right") {
+            Text(state.currentRepository?.name ?? "未选择仓库")
+            Text("\(state.status.files.count) 个改动 · \(state.status.branch.isEmpty ? "—" : state.status.branch)")
+            Divider()
+            Button("打开主窗口") {
+                if let window = NSApp.windows.first(where: { $0.title.contains(Brand.name) }) {
+                    window.makeKeyAndOrderFront(nil)
+                }
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            Button("手动刷新") { Task { await state.refresh(reason: .manual) } }
+                .disabled(state.currentRepository == nil)
+            Button("拉取") { Task { await state.pull() } }
+                .disabled(state.currentRepository == nil)
+            Button("推送") { Task { await state.push() } }
+                .disabled(state.currentRepository == nil)
+            Divider()
+            Button("退出 码牛") { NSApp.terminate(nil) }
+        }
+        .menuBarExtraStyle(.menu)
     }
 }

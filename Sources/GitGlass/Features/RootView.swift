@@ -15,6 +15,8 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
+                BrandHeader()
+                    .padding(.bottom, 12)
                 topBar
                 tabBar
                 content
@@ -111,7 +113,7 @@ struct RootView: View {
             .font(.system(size: 10.5))
             .foregroundStyle(.secondary)
         }
-        .padding(.top, 18)
+        .padding(.top, 10)
         .padding(.bottom, 12)
     }
 

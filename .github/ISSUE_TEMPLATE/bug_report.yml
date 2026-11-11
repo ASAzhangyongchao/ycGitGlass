@@ -30,7 +30,7 @@ body:
     id: environment
     attributes:
       label: 环境
-      placeholder: "macOS 26.2 / M4 / git 2.50 / GitGlass 1.1.0"
+      placeholder: "macOS 26.2 / M4 / git 2.50 / 码牛 MooGit 1.2.0"
     validations:
       required: true
   - type: textarea

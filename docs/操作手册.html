@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GitGlass 操作手册 · v1.1.0</title>
+<title>码牛 MooGit 操作手册 · v1.2.0</title>
 <style>
   :root {
     --blue: #4b7bf0;
@@ -120,8 +120,8 @@
 <div class="wrap">
 
 <header class="hero">
-  <div class="badge">v1.1.0 · macOS 26+ · 原生 Liquid Glass</div>
-  <h1>GitGlass <span>操作手册</span></h1>
+  <div class="badge">v1.2.0 · macOS 26+ · 原生 Liquid Glass</div>
+  <h1>码牛 MooGit <span>操作手册</span></h1>
   <p class="sub">提交简洁、历史清晰、远程源与多平台 SSH 密钥集中维护。零第三方依赖，零后台轮询。</p>
   <div class="meta">
     <div>应用体积约 3.5 MB</div>
@@ -155,14 +155,14 @@
   <h2><em>01</em> 安装与迁移</h2>
   <h3>直接在 Apple Silicon Mac 安装</h3>
   <ol>
-    <li>解压 <code>GitGlass-1.1.0-macOS26.zip</code>，把 <code>GitGlass.app</code> 拖进「应用程序」。</li>
+    <li>解压 <code>GitGlass-1.2.0-macOS26.zip</code>，把 <code>GitGlass.app</code> 拖进「应用程序」。</li>
     <li>若提示「无法验证开发者」，执行 <code>xattr -cr /Applications/GitGlass.app</code>，或右键 → 「打开」。</li>
     <li>运行 <code>open /Applications/GitGlass.app</code>。</li>
   </ol>
   <div class="note warn">现成 .app 是 arm64 架构、ad-hoc 本地签名。仅装 Command Line Tools 的环境无法构建通用二进制（缺 XCBuild.framework），所以 Intel Mac 请走源码重建。</div>
 
   <h3>在另一台 Mac 从源码构建</h3>
-  <pre><code>cd GitGlass-1.1.0-macOS26
+  <pre><code>cd GitGlass-1.2.0-macOS26
 xcode-select --install          # 已有 Xcode 26 可跳过
 chmod +x scripts/build-app.sh
 ./scripts/build-app.sh          # 自动编译当前机器架构
@@ -195,6 +195,14 @@ open dist/GitGlass.app</code></pre>
     <tr><td>远程源</td><td>维护 remote 地址、抓取 / 拉取 / 推送</td></tr>
     <tr><td>密钥</td><td>为每个平台生成维护 SSH 密钥、测试连接</td></tr>
   </table>
+  <h3>屏幕顶部菜单栏</h3>
+  <table>
+    <tr><th>位置</th><th>内容</th></tr>
+    <tr><td>菜单栏左侧</td><td>应用菜单「码牛」，含「关于 码牛 MooGit」与 Git 菜单（刷新 / 拉取 / 推送 / 储藏 / 页面快捷键）</td></tr>
+    <tr><td>菜单栏右侧</td><td>常驻分支小图标：点开看当前仓库、改动数与分支，直接「打开主窗口 / 手动刷新 / 拉取 / 推送 / 退出」，关掉主窗口也保留</td></tr>
+    <tr><td>窗口页头</td><td>玻璃品牌条：小牛 logo + 名称 + 版本 + 当前仓库 / 分支；标题栏显示「码牛 MooGit」</td></tr>
+  </table>
+  <div class="note">若 Dock 图标没换成小牛，退出应用后重新打开；必要时执行 <code>killall Dock</code> 刷新图标缓存。</div>
   <div class="note">应用不会自动轮询。改完代码后点顶栏「刷新」（<span class="kbd">⌘R</span>），或切一次仓库 / 分支，数据才会更新。</div>
 </section>
 
@@ -397,7 +405,7 @@ CommandRunner (Process, 参数数组 + 临时文件输出 + 超时保护)</code>
 </main>
 </div>
 
-<footer>GitGlass · 轻 Git　|　v1.1.0　|　本手册可直接在浏览器打印为 PDF</footer>
+<footer>码牛 MooGit　|　v1.2.0　|　本手册可直接在浏览器打印为 PDF</footer>
 </div>
 </body>
 </html>

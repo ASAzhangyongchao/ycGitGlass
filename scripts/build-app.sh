@@ -25,11 +25,12 @@ fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp -f "$BIN" "$APP/Contents/MacOS/GitGlass"
 cp -f "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
-if [[ ! -f "$ROOT/Resources/AppIcon.icns" ]]; then
-  echo "    图标缺失，自动生成本地图标"
-  swift "$ROOT/scripts/make-icon.swift"
+if [[ ! -f "$ROOT/Resources/AppIcon.icns" || ! -f "$ROOT/Resources/BrandHeader.png" ]]; then
+  echo "    品牌资源缺失，自动从 LogoSource.jpg 生成"
+  swift "$ROOT/scripts/make-brand-assets.swift"
 fi
 cp -f "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+cp -f "$ROOT/Resources/BrandHeader.png" "$APP/Contents/Resources/BrandHeader.png"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 chmod +x "$APP/Contents/MacOS/GitGlass"
 
