@@ -30,22 +30,76 @@ public enum UpdateState: Equatable, Sendable {
 
 /// GitHub Releases 更新检查。
 /// 与应用「零后台轮询」约定一致：只在启动满 24 小时或用户手动点击时调用一次，绝不定时轮询。
+///
+/// 网络策略：优先用系统代理（很多用户开着 Clash/Surge 等），
+/// 代理下超时则降级为"忽略代理直连"再试一次——两个世界都能通。
 public struct UpdateService: Sendable {
     public init() {}
 
+    /// 会话：遵循系统代理（默认行为）。
+    private static let proxiedSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 15
+        return URLSession(configuration: config)
+    }()
+
+    /// 会话：忽略系统代理直连（代理异常时的兜底）。
+    private static let directSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 15
+        config.connectionProxyDictionary = [:]
+        return URLSession(configuration: config)
+    }()
+
+    public enum UpdateError: LocalizedError {
+        case network(String)
+        case http(Int)
+
+        public var errorDescription: String? {
+            switch self {
+            case .network(let detail):
+                return "网络不可用（\(detail)）。若你开着代理/VPN，请确认其放行 api.github.com，或暂时关闭代理后重试。"
+            case .http(let code):
+                return "GitHub 返回 HTTP \(code)，请稍后再试。"
+            }
+        }
+    }
+
     /// 拉取最新 Release；仓库还没有任何 Release 时返回 nil（不算错误）。
     public func latest() async throws -> UpdateInfo? {
-        var request = URLRequest(url: AppConfig.updateAPIURL, timeoutInterval: 12)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("GitGlass/\(AppConfig.appVersion) update-check", forHTTPHeaderField: "User-Agent")
+        do {
+            return try await fetch(session: Self.proxiedSession)
+        } catch let error as UpdateError {
+            // 代理路径失败 → 直连兜底（代理软件偶尔拦 api.github.com）
+            if case .network = error {
+                return try await fetch(session: Self.directSession)
+            }
+            throw error
+        } catch {
+            throw error
+        }
+    }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+    private func fetch(session: URLSession) async throws -> UpdateInfo? {
+        var request = URLRequest(url: AppConfig.updateAPIURL)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("MooGit/\(AppConfig.appVersion) update-check", forHTTPHeaderField: "User-Agent")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw UpdateError.network(error.localizedDescription)
+        }
         guard let http = response as? HTTPURLResponse else {
-            throw AppError.io("更新服务响应异常")
+            throw UpdateError.network("响应异常")
         }
         if http.statusCode == 404 { return nil }
         guard (200..<300).contains(http.statusCode) else {
-            throw AppError.io("更新服务返回 HTTP \(http.statusCode)")
+            throw UpdateError.http(http.statusCode)
         }
 
         struct Payload: Codable {
