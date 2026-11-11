@@ -21,7 +21,6 @@ struct DashboardView: View {
                     if let operation = state.inProgressOperation {
                         operationBanner(operation)
                     }
-                    stats
                     HStack(alignment: .top, spacing: 16) {
                         quickActions
                         recentCommits
@@ -58,24 +57,6 @@ struct DashboardView: View {
         return state.status.stagedCount > 0
             ? "\(repo.name) 已备好一批改动，可以提交了"
             : "\(repo.name) 有新改动，看看要不要暂存"
-    }
-
-    private var stats: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-            StatTile(value: "\(state.status.unstagedCount)", label: "未暂存改动", icon: "doc.badge.plus",
-                     tint: GlassPalette.amber)
-            StatTile(value: "\(state.status.stagedCount)", label: "已暂存", icon: "checkmark.circle",
-                     tint: GlassPalette.mint)
-            StatTile(value: "\(state.status.ahead)/\(state.status.behind)", label: "领先 / 落后远程",
-                     icon: "arrow.up.arrow.down", tint: GlassPalette.blue)
-            StatTile(value: "\(state.stashes.count)", label: "储藏", icon: "archivebox",
-                     tint: GlassPalette.violet)
-            StatTile(value: "\(state.tags.count)", label: "标签", icon: "tag",
-                     tint: GlassPalette.amber)
-            StatTile(value: "\(state.commits.count)", label: "已加载提交", icon: "clock.arrow.circlepath",
-                     tint: GlassPalette.blue)
-        }
-        .animation(reduceMotion ? nil : Motion.spring, value: state.status.files.count)
     }
 
     private func operationBanner(_ operation: String) -> some View {
