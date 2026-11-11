@@ -4,10 +4,10 @@ import GitCore
 struct RootView: View {
     @Environment(AppState.self) private var state
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var glassNamespace
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var newBranchName = ""
     @State private var showNewBranch = false
+    @Namespace private var tabIndicator
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -149,36 +149,75 @@ struct RootView: View {
 
     @ViewBuilder
     private var tabBar: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 16) {
-                tabButtons
-            }
+        tabButtons
             .padding(.bottom, 14)
-        } else {
-            tabButtons.padding(.bottom, 14)
-        }
     }
 
+    /// 页签栏：单一玻璃轨道 + 等宽六格 + 滑动选中胶囊。
+    /// 关键体感修复：高度恒定（不换行不跳变），窄窗口下文字平滑收缩为纯图标，
+    /// 选中胶囊用 matchedGeometry 在格间滑动——不再是"整块滑到左边"的换行布局。
     private var tabButtons: some View {
-        // 六个页签宽度自适应：窄窗口时自动换行到第二行，而不是硬挤压截断文字。
-        FlowLayout(spacing: 7, data: AppTab.allCases) { tab in
-            let selected = state.selectedTab == tab
-            Button {
-                withComfortableAnimation(reduceMotion) { state.selectedTab = tab }
-            } label: {
-                Label(tab.rawValue, systemImage: tab.symbol)
-                    .font(.system(size: 12, weight: selected ? .semibold : .medium))
-                    .fixedSize()
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 9)
-                    .contentShape(Rectangle())
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                tabCell(tab)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(selected ? .primary : .secondary)
-            .glassPill(tint: selected ? GlassPalette.blue.opacity(0.20) : nil, interactive: true)
-            .glassIdentity(tab.rawValue, in: glassNamespace)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .glassSurface(cornerRadius: 13)
+        .padding(.bottom, 2)
+    }
+
+    private func tabCell(_ tab: AppTab) -> some View {
+        let selected = state.selectedTab == tab
+        return Button {
+            withComfortableAnimation(reduceMotion) { state.selectedTab = tab }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: tab.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(selected ? GlassPalette.blue : .secondary)
+                // 窄窗口自动让位：文字用低优先级布局，空间不足时优雅隐藏，留下图标
+                Text(tab.rawValue)
+                    .font(.system(size: 11.5, weight: selected ? .semibold : .medium))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .layoutPriority(selected ? 1 : 0)
+            }
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selected ? .primary : .secondary)
+        .background {
+            if selected {
+                // 选中胶囊：matchedGeometry 在页签间滑动（平滑体感的关键）
+                GeometryReader { proxy in
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(
+                            LinearGradient(colors: [GlassPalette.blue.opacity(0.18), GlassPalette.violet.opacity(0.14)],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(GlassPalette.blue.opacity(0.25), lineWidth: 1)
+                        )
+                        .shadow(color: GlassPalette.blue.opacity(0.15), radius: 6, y: 2)
+                        .frame(width: proxy.size.width - 6, height: proxy.size.height - 6)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .matchedGeometryEffect(id: "tab-indicator", in: tabIndicator)
+                .transition(.opacity)
+                .allowsHitTesting(false)
+            }
+        }
+        .animation(reduceMotion ? nil : Motion.spring, value: state.selectedTab)
+        .help("\(tab.rawValue)（⌘\(tabIndex(tab))）")
+    }
+
+    private func tabIndex(_ tab: AppTab) -> Int {
+        guard let index = AppTab.allCases.firstIndex(of: tab) else { return 1 }
+        return index + 1
     }
 
     // MARK: 内容区
