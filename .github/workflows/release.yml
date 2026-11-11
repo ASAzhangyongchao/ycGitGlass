@@ -66,11 +66,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.value }}
         run: |
+          # deploy key 推送的事件 actor 无邮箱时 --generate-notes 偶发静默失败；
+          # 改用显式 notes + 失败时打全量诊断，保证 Release 一定可见。
+          NOTES="$(printf '码牛 MooGit %s\n\n主要更新见 CHANGELOG.md。' "$TAG")"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.zip --clobber
           else
             gh release create "$TAG" dist/*.zip \
-              --title "GitGlass $TAG" \
-              --generate-notes
+              --title "码牛 MooGit $TAG" \
+              --notes "$NOTES" \
+              --verify-tag || {
+                echo "::error::gh release create 失败，诊断信息："
+                gh release view "$TAG" || true
+                gh api repos/:owner/:repo/releases || true
+                exit 1
+              }
           fi
           echo "已发布 $TAG"
