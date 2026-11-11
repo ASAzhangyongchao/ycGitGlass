@@ -20,12 +20,15 @@ struct RootView: View {
                     .padding(.bottom, 10)
                 actionBar
                 tabBar
-                refreshFooter
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 底部状态条：从页签上方移到窗口最底（内容区下方），给中部内容让位
+                refreshFooter
+                    .padding(.top, 6)
+                    .padding(.bottom, 2)
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 18)
+            .padding(.bottom, 14)
         }
         .navigationSplitViewStyle(.balanced)
         .background(GlassBackground())

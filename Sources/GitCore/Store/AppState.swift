@@ -420,6 +420,7 @@ public final class AppState {
         await mutate("正在暂存") {
             try await self.git.stage(paths: paths, at: path)
             self.selectedFilePaths = []
+            await self.reloadDiffAfterMutation()
             return "已暂存 \(paths.count) 个文件"
         }
     }
@@ -436,6 +437,7 @@ public final class AppState {
         await mutate("正在取消暂存") {
             try await self.git.unstage(paths: paths, at: path)
             self.selectedFilePaths = []
+            await self.reloadDiffAfterMutation()
             return "已取消暂存 \(paths.count) 个文件"
         }
     }
@@ -445,6 +447,7 @@ public final class AppState {
         await mutate("正在暂存全部") {
             try await self.git.stageAll(at: path)
             self.selectedFilePaths = []
+            await self.reloadDiffAfterMutation()
             return "已暂存全部改动"
         }
     }
@@ -453,7 +456,51 @@ public final class AppState {
         guard let path = currentPath else { return }
         await mutate("正在取消全部暂存") {
             try await self.git.unstageAll(at: path)
+            await self.reloadDiffAfterMutation()
             return "已取消全部暂存"
+        }
+    }
+
+    /// 暂存/取消暂存等改变文件状态的写操作后：若 diff 面板正显示着受影响的文件，
+    /// 立即按新状态重新加载，避免面板残留旧 diff（截图反馈的"没同步变"）。
+    private func reloadDiffAfterMutation() async {
+        guard let path = currentPath, !diffFilePath.isEmpty else { return }
+        guard let updated = status.files.first(where: { $0.path == diffFilePath }) else {
+            diffText = ""
+            return
+        }
+        do {
+            diffText = try await git.diff(for: updated.path, staged: updated.isStaged, at: path)
+        } catch {
+            diffText = ""
+        }
+    }
+
+    /// 单文件行内操作（悬停按钮）。
+    public func stageFile(_ file: FileChange) async {
+        guard let path = currentPath else { return }
+        await mutate("正在暂存 \(file.fileName)") {
+            try await self.git.stage(paths: [file.path], at: path)
+            await self.reloadDiffAfterMutation()
+            return ""
+        }
+    }
+
+    public func unstageFile(_ file: FileChange) async {
+        guard let path = currentPath, file.isStaged, !file.isUntracked else { return }
+        await mutate("正在取消暂存 \(file.fileName)") {
+            try await self.git.unstage(paths: [file.path], at: path)
+            await self.reloadDiffAfterMutation()
+            return ""
+        }
+    }
+
+    public func discardFile(_ file: FileChange) async {
+        guard let path = currentPath else { return }
+        await mutate("正在丢弃 \(file.fileName)") {
+            try await self.git.discard(paths: [file.path], at: path)
+            if self.diffFilePath == file.path { self.diffText = "" }
+            return "已丢弃 \(file.fileName)"
         }
     }
 

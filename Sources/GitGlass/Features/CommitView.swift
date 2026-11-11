@@ -13,16 +13,34 @@ struct CommitView: View {
         if state.currentRepository == nil {
             EmptyStateView(title: "还没有仓库", message: "先在左侧添加一个 Git 仓库。", icon: "folder")
         } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    composer
-                    HStack(alignment: .top, spacing: 18) {
-                        fileList
-                        diffPanel
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        composer
+                        HStack(alignment: .top, spacing: 18) {
+                            fileList
+                            diffPanel
+                        }
                     }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 6)
-                .padding(.bottom, 20)
+                // 底部固定刷新信息条（不再随内容滚动，也给底部留出呼吸空间）
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.horizontal.fill").font(.system(size: 9))
+                    if let date = state.lastRefreshed {
+                        Text("上次刷新 \(date.formatted(.dateTime.hour().minute())) · \(state.lastRefreshReason)")
+                    } else {
+                        Text("点顶栏「刷新」读取最新状态")
+                    }
+                    Spacer()
+                    Text("暂存/丢弃：悬停文件行右侧按钮")
+                        .foregroundStyle(.tertiary)
+                }
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+                .padding(.bottom, 14)
             }
             .alert("确定丢弃所选文件的改动？", isPresented: $showDiscardConfirm) {
                 Button("取消", role: .cancel) {}
@@ -241,6 +259,9 @@ struct CommitView: View {
             }
             .buttonStyle(.plain)
             .help(file.path)
+
+            // GitHub Desktop 式行内悬停操作：悬停浮出，离开隐去
+            HoverFileActions(file: file)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
@@ -290,7 +311,7 @@ struct CommitView: View {
                 .frame(maxWidth: .infinity, minHeight: 180)
             } else {
                 DiffTextView(text: state.diffText)
-                    .frame(minHeight: 220, maxHeight: 420)
+                    .frame(minHeight: 260, maxHeight: .infinity)
             }
         }
         .frame(minWidth: 340, maxWidth: .infinity)
