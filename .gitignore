@@ -1,0 +1,33 @@
+# SwiftPM
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+Package.resolved
+
+# 构建产物（CI 会自动生成；本地压缩包不入仓）
+dist/
+*.app/
+*.zip
+*.log
+
+# 图标中间产物（AppIcon.icns 需要提交，方便 clone 后直接构建）
+Resources/AppIcon.iconset/
+
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# 本地状态与敏感信息（绝不入库）
+.env
+*.env
+state.json
+*.pem
+*.p12
+id_rsa
+id_rsa_*
+id_ed25519
+id_ed25519_*
+!Resources/AppIcon.icns

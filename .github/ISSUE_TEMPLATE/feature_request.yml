@@ -1,0 +1,33 @@
+name: 功能建议
+description: 提出新能力或体验改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 描述日常工作流里卡住的那一步
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的做法
+      placeholder: 例如：在历史页支持按作者分组折叠
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 对你的重要程度
+      options:
+        - 每天都会用到
+        - 偶尔需要
+        - 锦上添花
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现在怎么绕过（可选）

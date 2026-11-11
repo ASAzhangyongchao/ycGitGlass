@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitGlass 操作手册 · v1.1.0</title>
+<style>
+  :root {
+    --blue: #4b7bf0;
+    --violet: #9a72f2;
+    --mint: #4cc7ad;
+    --amber: #e8a441;
+    --rose: #ea6b75;
+    --ink: #1d2433;
+    --muted: #5d6879;
+    --faint: #8792a3;
+    --line: rgba(60, 90, 140, 0.13);
+    --glass: rgba(255, 255, 255, 0.72);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    line-height: 1.75;
+    background:
+      radial-gradient(900px 520px at 8% -8%, rgba(75,123,240,.16), transparent 65%),
+      radial-gradient(760px 480px at 100% 0%, rgba(154,114,242,.14), transparent 62%),
+      radial-gradient(680px 520px at 0% 100%, rgba(76,199,173,.12), transparent 65%),
+      #f6f8fc;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px 80px; }
+  header.hero {
+    padding: 54px 0 34px;
+  }
+  .badge {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    background: rgba(75,123,240,.12); color: var(--blue);
+    font-size: 12px; font-weight: 600; letter-spacing: .3px;
+    border: 1px solid rgba(75,123,240,.2);
+  }
+  h1 { font-size: 38px; line-height: 1.2; margin: 18px 0 10px; letter-spacing: -.6px; }
+  h1 span { color: var(--blue); }
+  .sub { color: var(--muted); font-size: 15px; margin: 0 0 20px; }
+  .meta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .meta div {
+    background: var(--glass); border: 1px solid var(--line);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border-radius: 12px; padding: 8px 14px; font-size: 12px; color: var(--muted);
+    box-shadow: 0 6px 20px rgba(40,70,120,.06);
+  }
+  .layout { display: grid; grid-template-columns: 210px 1fr; gap: 30px; align-items: start; }
+  nav {
+    position: sticky; top: 22px;
+    background: var(--glass); border: 1px solid var(--line);
+    backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    border-radius: 18px; padding: 18px 16px;
+    box-shadow: 0 10px 30px rgba(40,70,120,.07);
+  }
+  nav strong { display: block; font-size: 12px; color: var(--faint); margin-bottom: 10px; letter-spacing: .6px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; font-size: 12.5px; padding: 5px 8px; border-radius: 8px; }
+  nav a:hover { background: rgba(75,123,240,.10); color: var(--blue); }
+  section {
+    background: var(--glass); border: 1px solid var(--line);
+    backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    border-radius: 20px; padding: 24px 28px; margin-bottom: 18px;
+    box-shadow: 0 12px 34px rgba(40,70,120,.07), inset 0 1px 0 rgba(255,255,255,.8);
+  }
+  h2 { font-size: 20px; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  h2 em { font-style: normal; color: var(--blue); margin-right: 9px; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 15px; margin: 22px 0 8px; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 9px 0; padding-left: 22px; }
+  li { margin: 5px 0; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+    background: rgba(75,123,240,.09); color: #3459a8; padding: 2px 6px; border-radius: 6px;
+  }
+  pre {
+    background: #1e2533; color: #e7ecf6; border-radius: 12px; padding: 15px 18px;
+    overflow-x: auto; font-size: 12px; line-height: 1.7; margin: 12px 0;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(75,123,240,.07); font-weight: 600; color: var(--ink); }
+  tr:last-child td { border-bottom: none; }
+  .note {
+    border-left: 3px solid var(--blue); background: rgba(75,123,240,.07);
+    padding: 11px 15px; border-radius: 0 10px 10px 0; margin: 13px 0; font-size: 13px; color: var(--muted);
+  }
+  .note.warn { border-color: var(--amber); background: rgba(232,164,65,.10); }
+  .note.good { border-color: var(--mint); background: rgba(76,199,173,.10); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 14px 0; }
+  .tile {
+    background: rgba(255,255,255,.62); border: 1px solid var(--line);
+    border-radius: 14px; padding: 14px 16px;
+  }
+  .tile b { display: block; font-size: 13px; margin-bottom: 5px; }
+  .tile span { color: var(--muted); font-size: 12px; }
+  .kbd {
+    display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 11.5px;
+    border: 1px solid var(--line); background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    font-family: -apple-system, sans-serif; white-space: nowrap;
+  }
+  footer { text-align: center; color: var(--faint); font-size: 12px; padding: 24px 0; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } nav { position: static; } h1 { font-size: 30px; } }
+  @media print {
+    body { background: #fff; }
+    nav { display: none; }
+    .layout { grid-template-columns: 1fr; }
+    section { box-shadow: none; break-inside: avoid; border-radius: 12px; background: #fff; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="badge">v1.1.0 · macOS 26+ · 原生 Liquid Glass</div>
+  <h1>GitGlass <span>操作手册</span></h1>
+  <p class="sub">提交简洁、历史清晰、远程源与多平台 SSH 密钥集中维护。零第三方依赖，零后台轮询。</p>
+  <div class="meta">
+    <div>应用体积约 3.5 MB</div>
+    <div>空闲内存约 38 MB</div>
+    <div>自检 129 项通过</div>
+    <div>编译 0 error / 0 warning</div>
+  </div>
+</header>
+
+<div class="layout">
+<nav>
+  <strong>目录</strong>
+  <a href="#install">1. 安装与迁移</a>
+  <a href="#ui">2. 认识界面</a>
+  <a href="#dashboard">3. 工作台</a>
+  <a href="#commit">4. 提交代码</a>
+  <a href="#history">5. 历史 / 遴选 / 冲突</a>
+  <a href="#stash">6. 储藏与标签</a>
+  <a href="#remote">7. 远程源</a>
+  <a href="#keys">8. SSH 密钥</a>
+  <a href="#perf">9. 刷新与性能</a>
+  <a href="#shortcuts">10. 快捷键</a>
+  <a href="#faq">11. 故障排查</a>
+  <a href="#privacy">12. 隐私与安全</a>
+  <a href="#dev">13. 开发者说明</a>
+</nav>
+
+<main>
+
+<section id="install">
+  <h2><em>01</em> 安装与迁移</h2>
+  <h3>直接在 Apple Silicon Mac 安装</h3>
+  <ol>
+    <li>解压 <code>GitGlass-1.1.0-macOS26.zip</code>，把 <code>GitGlass.app</code> 拖进「应用程序」。</li>
+    <li>若提示「无法验证开发者」，执行 <code>xattr -cr /Applications/GitGlass.app</code>，或右键 → 「打开」。</li>
+    <li>运行 <code>open /Applications/GitGlass.app</code>。</li>
+  </ol>
+  <div class="note warn">现成 .app 是 arm64 架构、ad-hoc 本地签名。仅装 Command Line Tools 的环境无法构建通用二进制（缺 XCBuild.framework），所以 Intel Mac 请走源码重建。</div>
+
+  <h3>在另一台 Mac 从源码构建</h3>
+  <pre><code>cd GitGlass-1.1.0-macOS26
+xcode-select --install          # 已有 Xcode 26 可跳过
+chmod +x scripts/build-app.sh
+./scripts/build-app.sh          # 自动编译当前机器架构
+open dist/GitGlass.app</code></pre>
+  <p>脚本中的 <code>--disable-sandbox</code> 用于受管环境不允许 SwiftPM 嵌套沙箱的情况，普通 Xcode 环境保留也无害。</p>
+
+  <h3>迁移个人配置</h3>
+  <table>
+    <tr><th>数据</th><th>位置 / 操作</th></tr>
+    <tr><td>仓库列表、自定义平台、密钥归类</td><td>复制 <code>~/Library/Application Support/GitGlass/state.json</code> 到新机器同路径</td></tr>
+    <tr><td>SSH 密钥</td><td>应用不会打包密钥；请自行安全迁移 <code>~/.ssh/</code>，或在新机器重新生成并添加公钥</td></tr>
+    <tr><td>SSH Host 规则</td><td>新机器「密钥」页点「写入 ~/.ssh/config」重新生成</td></tr>
+    <tr><td>卸载</td><td>删除 <code>GitGlass.app</code>；想清配置再删上述 <code>state.json</code></td></tr>
+  </table>
+</section>
+
+<section id="ui">
+  <h2><em>02</em> 认识界面</h2>
+  <div class="grid">
+    <div class="tile"><b>左侧边栏</b><span>仓库列表、添加 / 扫描 / 新建 / 克隆</span></div>
+    <div class="tile"><b>顶栏</b><span>分支切换、领先落后、拉取 / 推送 / 手动刷新</span></div>
+    <div class="tile"><b>内容区</b><span>六个页签，玻璃形变切换</span></div>
+  </div>
+  <table>
+    <tr><th>页签</th><th>什么时候用</th></tr>
+    <tr><td>工作台</td><td>每天先看一眼：多少改动、要不要拉取、最近提交了什么</td></tr>
+    <tr><td>提交</td><td>勾选文件、看 diff、暂存、写说明、提交</td></tr>
+    <tr><td>历史</td><td>找某次提交、看彩色分支图、遴选 / 还原 / 打标签</td></tr>
+    <tr><td>储藏</td><td>临时收起改动、恢复储藏、管理标签、中止冲突中的遴选</td></tr>
+    <tr><td>远程源</td><td>维护 remote 地址、抓取 / 拉取 / 推送</td></tr>
+    <tr><td>密钥</td><td>为每个平台生成维护 SSH 密钥、测试连接</td></tr>
+  </table>
+  <div class="note">应用不会自动轮询。改完代码后点顶栏「刷新」（<span class="kbd">⌘R</span>），或切一次仓库 / 分支，数据才会更新。</div>
+</section>
+
+<section id="dashboard">
+  <h2><em>03</em> 工作台</h2>
+  <ul>
+    <li>一句话总结当前仓库状态：<code>仓库名 有 N 个改动，M 个已暂存</code>。</li>
+    <li>六个统计块：未暂存、已暂存、领先/落后、储藏数、标签数、已加载提交数。</li>
+    <li>「今天要做的事」按推荐顺序列出拉取 → 查看并暂存 → 一键提交全部并推送。</li>
+    <li>最近 5 条提交，点任意一条跳到历史页并打开右侧详情。</li>
+    <li>遴选 / 还原 / 合并进行中时，顶部出现黄色横幅，点「去处理」跳转。</li>
+  </ul>
+  <div class="note good">「一键提交全部并推送」在没有说明时自动生成 <code>chore: 更新 N 个文件</code>，适合日常小改动；需要规范说明请到「提交」页手写。</div>
+</section>
+
+<section id="commit">
+  <h2><em>04</em> 提交代码</h2>
+  <h3>标准流程</h3>
+  <ol>
+    <li>在「代码变更」里选列表视图或目录树视图（大仓库推荐目录树）。</li>
+    <li>勾选文件 → 「暂存所选」或「暂存全部」。</li>
+    <li>写一句说明，可点 <code>feat</code> / <code>fix</code> / <code>docs</code> / <code>refactor</code> / <code>test</code> / <code>chore</code> 快捷插入前缀。</li>
+    <li>点「提交」或「提交并推送」（首次推送自动建立上游关联）。</li>
+  </ol>
+  <h3>差异预览与其它操作</h3>
+  <table>
+    <tr><th>功能</th><th>说明</th></tr>
+    <tr><td>逐行 diff</td><td>绿色新增、红色删除、紫色 hunk；未跟踪文件退化为文本预览（超过 256 KB / 二进制会提示）</td></tr>
+    <tr><td>取消暂存</td><td>空仓库首次提交前自动改用 <code>git rm --cached</code></td></tr>
+    <tr><td>丢弃所选改动</td><td>危险操作，二次确认</td></tr>
+    <tr><td>储藏当前改动</td><td>切分支或遴选前临时收起，到「储藏」页恢复</td></tr>
+  </table>
+</section>
+
+<section id="history">
+  <h2><em>05</em> 历史、遴选与提交详情</h2>
+  <h3>彩色分支轨道</h3>
+  <p>由 <code>git log --graph</code> 用 Canvas 重绘：不同颜色代表不同分支 lane，圆点是提交，竖线 / 斜线 / 横线是分支与合并关系，悬停可看原始图形字符。</p>
+
+  <h3>搜索语法</h3>
+  <table>
+    <tr><th>输入</th><th>效果</th></tr>
+    <tr><td><code>登录</code></td><td>在说明 / 作者 / 邮箱 / hash / 标签里即时本地过滤，不执行 git 命令</td></tr>
+    <tr><td><code>author:张三</code></td><td>按作者过滤</td></tr>
+    <tr><td><code>message:修复</code></td><td>按提交说明过滤</td></tr>
+    <tr><td><code>hash:a1b2c3</code></td><td>按提交号过滤</td></tr>
+    <tr><td><code>file:README.md</code></td><td>按文件搜索完整历史，需点「深度搜索」</td></tr>
+    <tr><td><code>since:2026-01-01</code></td><td>日期范围，需点「深度搜索」</td></tr>
+    <tr><td>勾选「全部分支」</td><td>读取所有分支提交，触发一次刷新</td></tr>
+  </table>
+  <div class="note">「深度搜索」真正执行 <code>git log</code>，最多 500 条，用于查已加载范围之外的历史。</div>
+
+  <h3>提交详情面板</h3>
+  <p>点列表任意一条，右侧滑出详情：完整提交号（可复制）、作者 / 提交者 / 时间 / 父提交 / 引用、文件数与增删行统计、说明正文、操作按钮、按目录折叠的变更文件树、逐文件 diff。</p>
+
+  <h3>遴选 Cherry-pick（借鉴 Sourcetree）</h3>
+  <ol>
+    <li>找到目标提交（必要时勾「全部分支」或深度搜索）。</li>
+    <li>详情面板点「遴选」→ 确认。</li>
+    <li>成功后自动刷新，新提交出现在当前分支历史顶部，原提交保持不变。</li>
+  </ol>
+  <div class="note warn">若内容冲突，工作台出现提示，「储藏」页展开冲突处理面板。Git 内容寻址下，父提交 / 文件树 / 作者 / 时间戳完全一致时，遴选产生的新提交 hash 可能与原提交相同，属正常现象。</div>
+
+  <h3>冲突可视化处理</h3>
+  <table>
+    <tr><th>操作</th><th>作用</th></tr>
+    <tr><td>冲突文件列表</td><td>显示文件名与完整路径，可一键在 Finder 打开仓库目录</td></tr>
+    <tr><td>采用当前分支</td><td><code>git checkout --ours</code>，保留自己这一侧</td></tr>
+    <tr><td>采用对方</td><td><code>git checkout --theirs</code>，用被遴选提交的内容</td></tr>
+    <tr><td>已手动解决</td><td>编辑器里删掉冲突标记后，把文件标记为已解决</td></tr>
+    <tr><td>继续 / 中止</td><td>全部解决后执行 <code>--continue</code>；或直接 <code>--abort</code> 回到操作前</td></tr>
+  </table>
+  <p>每处理一个文件自动刷新一次；没有进行中的操作时，冲突列表不执行任何 git 命令。</p>
+
+  <h3>还原 Reverse commit</h3>
+  <p>生成一条反向提交撤销历史改动，不改写已有历史，适合已推送的提交。操作同样在详情面板，有二次确认。</p>
+</section>
+
+<section id="stash">
+  <h2><em>06</em> 储藏与标签</h2>
+  <table>
+    <tr><th>操作</th><th>说明</th></tr>
+    <tr><td>储藏当前改动</td><td>可写说明、可选包含未跟踪文件；储藏后工作区干净</td></tr>
+    <tr><td>恢复</td><td><code>git stash apply</code>，保留记录</td></tr>
+    <tr><td>恢复并移除</td><td><code>git stash pop</code></td></tr>
+    <tr><td>删除储藏</td><td>二次确认</td></tr>
+    <tr><td>新建标签</td><td>填名称 + 可选附注；给历史提交打标签请到历史详情面板</td></tr>
+    <tr><td>中止当前操作</td><td>对遴选 / 还原 / 合并 / 变基执行对应的 <code>--abort</code></td></tr>
+  </table>
+  <div class="note good">工作区干净时点储藏会明确提示「当前没有可储藏的改动」，不会误报成功。</div>
+</section>
+
+<section id="remote">
+  <h2><em>07</em> 远程源</h2>
+  <table>
+    <tr><th>操作</th><th>说明</th></tr>
+    <tr><td>添加 / 编辑 / 重命名 / 删除</td><td>每行右侧「操作」菜单，删除二次确认；建议用 SSH 地址</td></tr>
+    <tr><td>抓取</td><td><code>git fetch --prune</code></td></tr>
+    <tr><td>拉取</td><td><code>git pull --ff-only</code>，保持历史线性、避免多余合并提交</td></tr>
+    <tr><td>推送</td><td>首次自动建立上游；被拒绝时提示先拉取</td></tr>
+  </table>
+  <p>一个仓库可同时配置多个远程源（例如 <code>origin</code> 与 <code>upstream</code>）。远程源为空时仍可正常本地提交。</p>
+</section>
+
+<section id="keys">
+  <h2><em>08</em> 多平台 SSH 密钥</h2>
+  <p>内置 GitHub、GitLab、Gitee、Bitbucket、CODING，也可添加自建平台。</p>
+  <h3>首次配置流程</h3>
+  <ol>
+    <li>平台卡片点「生成密钥」，可选填邮箱与密码短语（不会被保存或写日志）。</li>
+    <li>生成 ED25519 密钥对 <code>~/.ssh/id_ed25519_&lt;平台&gt;</code>，私钥权限自动 600。</li>
+    <li>点「复制公钥」粘贴到平台账号的 SSH Keys 页面。</li>
+    <li>点「测试连接」确认认证通过。</li>
+    <li>多平台多账号点「写入 ~/.ssh/config」生成独立 Host 规则，避免串号。</li>
+  </ol>
+  <div class="note">应用只改 <code># &gt;&gt;&gt; GitGlass managed &gt;&gt;&gt;</code> 标记块，用户手写配置原样保留，首次写入自动备份为 <code>config.gitglass.bak</code>。<strong>私钥内容从不读取、展示、复制或记录。</strong></div>
+</section>
+
+<section id="perf">
+  <h2><em>09</em> 刷新机制与性能</h2>
+  <table>
+    <tr><th>会触发刷新</th><th>不会触发刷新</th></tr>
+    <tr><td>应用启动（一次）</td><td>定时器 / 轮询</td></tr>
+    <tr><td>点「手动刷新」或 <span class="kbd">⌘R</span></td><td>应用切前后台</td></tr>
+    <tr><td>切换仓库 / 切换分支</td><td>文件系统变化监听</td></tr>
+    <tr><td>写操作成功、遴选冲突失败后</td><td>打字输入（历史搜索纯内存过滤）</td></tr>
+    <tr><td>点「深度搜索」、勾选「全部分支」</td><td>窗口获得焦点 / 网络状态变化</td></tr>
+  </table>
+  <div class="note good">一次刷新并行读取状态、分支、历史、远程源、储藏、标签、密钥；冲突文件列表仅在检测到「操作进行中」时才额外读取，正常仓库零额外进程。空闲时没有后台任务、没有循环动画；应用 footprint 约 38 MB 且长时间不增长。动画全部事件驱动，支持「减弱动态效果」与「降低透明度」。</div>
+</section>
+
+<section id="shortcuts">
+  <h2><em>10</em> 快捷键</h2>
+  <table>
+    <tr><th>快捷键</th><th>功能</th><th>快捷键</th><th>功能</th></tr>
+    <tr><td><span class="kbd">⌘R</span></td><td>手动刷新</td><td><span class="kbd">⌘3</span></td><td>历史</td></tr>
+    <tr><td><span class="kbd">⌘L</span></td><td>拉取</td><td><span class="kbd">⌘4</span></td><td>储藏 / 标签</td></tr>
+    <tr><td><span class="kbd">⇧⌘P</span></td><td>推送</td><td><span class="kbd">⌘5</span></td><td>远程源</td></tr>
+    <tr><td><span class="kbd">⌥⌘S</span></td><td>储藏当前改动</td><td><span class="kbd">⌘6</span></td><td>密钥</td></tr>
+    <tr><td><span class="kbd">⌘1</span></td><td>工作台</td><td><span class="kbd">⌘2</span></td><td>提交</td></tr>
+  </table>
+</section>
+
+<section id="faq">
+  <h2><em>11</em> 故障排查</h2>
+  <table>
+    <tr><th>现象</th><th>处理</th></tr>
+    <tr><td>提示「无法验证开发者」</td><td><code>xattr -cr /Applications/GitGlass.app</code> 或右键「打开」</td></tr>
+    <tr><td>「不是 Git 仓库」</td><td>目录里没有 <code>.git</code>；用「新建仓库」初始化或重新选目录</td></tr>
+    <tr><td>推送被拒绝</td><td>远程有新提交，先「拉取」再推送</td></tr>
+    <tr><td>SSH 认证失败</td><td>确认公钥已加到平台账号、私钥存在且权限 600，点「测试连接」</td></tr>
+    <tr><td>提交按钮是灰的</td><td>需要有已暂存文件 + 非空提交说明</td></tr>
+    <tr><td>切分支失败</td><td>先提交或储藏当前改动</td></tr>
+    <tr><td>遴选后出现冲突面板</td><td>用「采用当前分支 / 采用对方 / 已手动解决」逐个处理，再点「继续」；或「中止当前操作」</td></tr>
+    <tr><td>数据看起来没更新</td><td>点「刷新」或切一次仓库 / 分支</td></tr>
+    <tr><td>Intel Mac 打不开 .app</td><td>按第 1 章用源码在目标机器重建</td></tr>
+    <tr><td>构建报 sandbox-exec 错误</td><td>使用脚本的 <code>--disable-sandbox</code>，或安装完整 Xcode</td></tr>
+  </table>
+  <p>错误提示条给出中文原因与修复建议，展开「查看原始信息」可看 git 原始 stderr。</p>
+</section>
+
+<section id="privacy">
+  <h2><em>12</em> 隐私与安全</h2>
+  <table>
+    <tr><th>项目</th><th>做法</th></tr>
+    <tr><td>命令执行</td><td>参数数组 + <code>--</code> 分隔路径，绝不拼 shell 字符串</td></tr>
+    <tr><td>私钥</td><td>不读取、不复制、不写日志、不随分发包传播</td></tr>
+    <tr><td>日志</td><td>系统 os.Logger 结构化 JSON，私钥块与 token 参数脱敏</td></tr>
+    <tr><td>网络</td><td>仅 git 同步与 <code>ssh -T</code> 测试；无统计上报</td></tr>
+    <tr><td>凭据</td><td>不存储账号密码 / 令牌，认证交给系统 git / ssh-agent</td></tr>
+    <tr><td>危险操作</td><td>删除、丢弃、遴选、还原均二次确认</td></tr>
+  </table>
+</section>
+
+<section id="dev">
+  <h2><em>13</em> 开发者说明</h2>
+  <h3>分层</h3>
+  <pre><code>Views (SwiftUI)
+   ↓ 只消费状态
+AppState (@Observable @MainActor, 刷新编排)
+   ↓
+GitService / SSHKeyService (领域服务)
+   ↓
+CommandRunner (Process, 参数数组 + 临时文件输出 + 超时保护)</code></pre>
+  <p>持久化用单个 JSON 文件，不引入数据库；错误用 <code>AppError</code> 类型化 + 中文恢复建议；Swift 6 严格并发；用 continuation 排队避免快速切仓库时刷新被丢弃。</p>
+  <h3>自检</h3>
+  <pre><code>swift run --disable-sandbox GitGlassSelfTest
+# 结果：129 通过，0 失败</code></pre>
+  <p>在临时 Git 仓库与临时 SSH 目录上分 12 个章节覆盖状态、暂存、提交、历史搜索、遴选、还原、<strong>冲突检测与选边 / 继续 / 中止</strong>、储藏、标签、提交详情、中文空格路径、远程源、错误映射、持久化、密钥生成与权限、SSH config 幂等与备份、命令超时与并发、模型契约；不触碰用户真实 <code>~/.ssh</code>。</p>
+  <h3>扩展点</h3>
+  <ul>
+    <li>新增 git 能力：<code>GitService</code> 加方法 → <code>AppState</code> 加 mutate 包装 → 页面加按钮。</li>
+    <li>新增页面：<code>AppTab</code> 加 case → <code>RootView</code> 的 switch 加视图。</li>
+    <li>刷新只在 <code>AppState.refresh</code> / <code>mutate</code> 触发，请勿引入 Timer。</li>
+  </ul>
+  <h3>在 GitHub 上维护</h3>
+  <p><code>main</code> 为受保护分支，改动走 PR。<code>ci.yml</code> 在 <code>macos-26</code> runner 上跑编译、自检、静态检查与打包；<code>release.yml</code> 在推送 <code>v*</code> tag 时自动发布带分发 zip 的 Release。本地发版用 <code>./scripts/release.sh vX.Y.Z</code>，贡献前读 <code>CONTRIBUTING.md</code>。</p>
+</section>
+
+</main>
+</div>
+
+<footer>GitGlass · 轻 Git　|　v1.1.0　|　本手册可直接在浏览器打印为 PDF</footer>
+</div>
+</body>
+</html>

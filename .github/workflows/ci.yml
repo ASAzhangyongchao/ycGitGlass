@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-selftest:
+    name: Build + 129-item self test + package
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+          git --version
+          xcodebuild -version || true
+
+      - name: Resolve packages (zero third-party dependencies expected)
+        run: swift package resolve
+
+      - name: Debug build
+        run: swift build -v
+
+      - name: Self test on real temporary repositories
+        run: swift run GitGlassSelfTest | tee selftest.log
+
+      - name: Assert zero failures
+        run: |
+          grep -q "0 失败" selftest.log
+          tail -3 selftest.log
+
+      - name: Static guard - no polling / timers
+        run: |
+          if grep -RInE 'Timer\(|DispatchSourceTimer|repeatForever|TimelineView|FSEvents' Sources --include='*.swift' | grep -v '///' | grep -v '// '; then
+            echo "发现定时/轮询代码，违反轻量约定"
+            exit 1
+          fi
+          echo "未发现后台轮询代码"
+
+      - name: Release build and assemble .app
+        run: |
+          chmod +x scripts/build-app.sh
+          ./scripts/build-app.sh
+
+      - name: Verify bundle
+        run: |
+          test -x dist/GitGlass.app/Contents/MacOS/GitGlass
+          test -f dist/GitGlass.app/Contents/Resources/AppIcon.icns
+          plutil -lint dist/GitGlass.app/Contents/Info.plist
+          lipo -info dist/GitGlass.app/Contents/MacOS/GitGlass
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GitGlass-app-${{ github.sha }}
+          path: dist/GitGlass.app
+          if-no-files-found: error
+          retention-days: 14

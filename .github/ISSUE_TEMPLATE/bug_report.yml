@@ -1,0 +1,56 @@
+name: 问题报告
+description: 报告 GitGlass 的异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先点顶栏「刷新」确认不是数据未更新导致的误判。
+        请勿粘贴私钥、令牌、完整公钥文件内容。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 描述现象与你的预期
+      placeholder: 例如：点「提交并推送」后提示 ...，但远程其实已经有新提交
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 添加仓库 ...
+        2. 切到 ... 页
+        3. 点击 ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      placeholder: "macOS 26.2 / M4 / git 2.50 / GitGlass 1.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: error-detail
+    attributes:
+      label: 错误提示（可选）
+      description: 可展开错误提示条的「查看原始信息」，注意先脱敏
+      render: shell
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及模块
+      options:
+        - 工作台
+        - 提交 / 差异
+        - 历史 / 遴选 / 冲突
+        - 储藏 / 标签
+        - 远程源
+        - SSH 密钥
+        - 安装 / 打包
+        - 其它
+    validations:
+      required: true

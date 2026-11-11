@@ -1,0 +1,224 @@
+import SwiftUI
+import GitCore
+
+/// 工作台：一屏看完全天要处理的事，常用动作一步到位。
+struct DashboardView: View {
+    @Environment(AppState.self) private var state
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                greeting
+                if state.currentRepository == nil {
+                    EmptyStateView(
+                        title: "先添加一个仓库",
+                        message: "在左侧点「添加仓库…」选择本地 Git 文件夹，或用「扫描文件夹」一次导入多个项目。",
+                        icon: "folder.badge.gearshape"
+                    )
+                    .frame(minHeight: 320)
+                } else {
+                    if let operation = state.inProgressOperation {
+                        operationBanner(operation)
+                    }
+                    stats
+                    HStack(alignment: .top, spacing: 16) {
+                        quickActions
+                        recentCommits
+                    }
+                    if !state.onboardingSeen { onboarding }
+                }
+            }
+            .padding(.vertical, 6)
+            .padding(.bottom, 20)
+        }
+        .animation(Motion.spring, value: state.status.files.count)
+    }
+
+    private var greeting: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(Date.now.formatted(.dateTime.month().day().weekday(.wide)))
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(summary)
+                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .lineLimit(2)
+        }
+    }
+
+    private var summary: String {
+        guard let repo = state.currentRepository else { return "开始管理你的 Git 仓库" }
+        if state.status.isClean {
+            return "\(repo.name) 很干净，没有待提交的改动"
+        }
+        return "\(repo.name) 有 \(state.status.files.count) 个改动，\(state.status.stagedCount) 个已暂存"
+    }
+
+    private var stats: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+            StatTile(value: "\(state.status.unstagedCount)", label: "未暂存改动", icon: "doc.badge.plus",
+                     tint: GlassPalette.amber)
+            StatTile(value: "\(state.status.stagedCount)", label: "已暂存", icon: "checkmark.circle",
+                     tint: GlassPalette.mint)
+            StatTile(value: "\(state.status.ahead)/\(state.status.behind)", label: "领先 / 落后远程",
+                     icon: "arrow.up.arrow.down", tint: GlassPalette.blue)
+            StatTile(value: "\(state.stashes.count)", label: "储藏", icon: "archivebox",
+                     tint: GlassPalette.violet)
+            StatTile(value: "\(state.tags.count)", label: "标签", icon: "tag",
+                     tint: GlassPalette.amber)
+            StatTile(value: "\(state.commits.count)", label: "已加载提交", icon: "clock.arrow.circlepath",
+                     tint: GlassPalette.blue)
+        }
+        .animation(reduceMotion ? nil : Motion.spring, value: state.status.files.count)
+    }
+
+    private func operationBanner(_ operation: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(GlassPalette.amber)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(operation)操作进行中")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text("可能遇到了冲突，先处理再继续提交。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            ActionButton(title: "去处理", icon: "arrow.right", prominent: true) {
+                withComfortableAnimation(reduceMotion) { state.selectedTab = .stashes }
+            }
+        }
+        .padding(14)
+        .glassSurface(cornerRadius: 16, tint: GlassPalette.amber.opacity(0.14))
+        .cardShadow()
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    private var quickActions: some View {
+        GlassCard(title: "今天要做的事", icon: "bolt.fill", subtitle: "按推荐顺序，一步一个动作") {
+            VStack(alignment: .leading, spacing: 11) {
+                actionRow(number: "1", title: "拉取远程改动", caption: "先同步，避免推送被拒绝", icon: "arrow.down") {
+                    Task { await state.pull() }
+                }
+                actionRow(number: "2", title: "查看并暂存改动", caption: "勾选文件、写好一句说明", icon: "doc.text.magnifyingglass") {
+                    withComfortableAnimation(reduceMotion) { state.selectedTab = .commit }
+                }
+                actionRow(number: "3", title: "一键提交全部并推送", caption: "自动暂存所有改动并生成简洁说明", icon: "paperplane.fill") {
+                    Task { await state.quickCommitAll() }
+                }
+                Divider().padding(.vertical, 2)
+                HStack(spacing: 8) {
+                    ActionButton(title: "手动刷新", icon: "arrow.clockwise") {
+                        Task { await state.refresh(reason: .manual) }
+                    }
+                    .disabled(state.isBusy)
+                    ActionButton(title: "查看历史", icon: "clock.arrow.circlepath") {
+                        withComfortableAnimation(reduceMotion) { state.selectedTab = .history }
+                    }
+                }
+                .disabled(state.isBusy)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func actionRow(number: String, title: String, caption: String, icon: String,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Text(number)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .frame(width: 20, height: 20)
+                    .background(GlassPalette.accent.opacity(0.85), in: Circle())
+                Image(systemName: icon).font(.system(size: 12)).foregroundStyle(GlassPalette.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 12.5, weight: .semibold))
+                    Text(caption).font(.system(size: 10.5)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+            .padding(10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .disabled(state.isBusy)
+    }
+
+    private var recentCommits: some View {
+        GlassCard(title: "最近提交", icon: "clock", subtitle: "点任意一条查看变更文件") {
+            if state.commits.isEmpty {
+                Text("这个仓库还没有提交记录")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(state.commits.prefix(5).enumerated()), id: \.element.id) { index, commit in
+                        Button {
+                            withComfortableAnimation(reduceMotion) { state.selectedTab = .history }
+                            Task { await state.selectCommit(commit) }
+                        } label: {
+                            HStack(alignment: .top, spacing: 9) {
+                                Circle()
+                                    .fill(GlassPalette.accent.opacity(0.65))
+                                    .frame(width: 6, height: 6)
+                                    .padding(.top, 5)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(commit.subject)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .lineLimit(1)
+                                    Text("\(commit.author) · \(commit.displayDate) · \(commit.shortHash)")
+                                        .font(.system(size: 10.5, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 7)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .staggered(index)
+                        if index < min(4, state.commits.count - 1) {
+                            Divider().opacity(0.5)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var onboarding: some View {
+        GlassCard(title: "三步上手", icon: "sparkles", tint: GlassPalette.violet.opacity(0.10)) {
+            VStack(alignment: .leading, spacing: 9) {
+                onboardingLine("1", "左侧添加或扫描本地仓库")
+                onboardingLine("2", "「提交」页勾选文件 → 暂存 → 写一句说明 → 提交")
+                onboardingLine("3", "「密钥」页为每个平台生成密钥并复制公钥到平台账号")
+                InfoHint(text: "所有 git 数据只在手动刷新、切仓库、切分支或操作完成后更新，不会后台偷偷跑。",
+                         tint: GlassPalette.mint)
+                HStack {
+                    Spacer()
+                    ActionButton(title: "知道了", icon: "checkmark", prominent: true) {
+                        withComfortableAnimation(reduceMotion) { state.completeOnboarding() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func onboardingLine(_ number: String, _ text: String) -> some View {
+        HStack(spacing: 10) {
+            Text(number)
+                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                .foregroundStyle(GlassPalette.violet)
+                .frame(width: 18, height: 18)
+                .background(GlassPalette.violet.opacity(0.14), in: Circle())
+            Text(text).font(.system(size: 12))
+        }
+    }
+}

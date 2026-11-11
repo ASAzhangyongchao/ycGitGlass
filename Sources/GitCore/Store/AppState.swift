@@ -1,0 +1,806 @@
+import Foundation
+import Observation
+
+/// 全局状态与「刷新编排」的唯一收口。
+///
+/// 刷新策略（刻意设计，勿改）：
+/// 数据只在这 5 类事件后读取 —— 启动、手动点刷新、切换仓库、切换分支、写操作完成。
+/// 本文件没有任何 Timer / Task.sleep 循环 / DispatchSourceTimer / FSEvents / 文件描述符监听，
+/// 也不监听应用前后台切换；因此应用在空闲时 CPU 占用为 0。
+@Observable
+@MainActor
+public final class AppState {
+    // MARK: 持久化数据
+    public var repositories: [Repository] = []
+    public var selectedRepoID: UUID?
+    public var platforms: [GitPlatform] = AppConfig.defaultPlatforms
+    public var keyPlatformBindings: [String: String] = [:]
+    public var onboardingSeen = false
+
+    // MARK: 仓库快照（只在 refresh 时更新）
+    public var status: WorktreeStatus = .empty
+    public var branches: [Branch] = []
+    public var commits: [Commit] = []
+    public var remotes: [Remote] = []
+    public var keys: [SSHKeyPair] = []
+    public var lastRefreshed: Date?
+    public var lastRefreshReason: String = ""
+
+    // MARK: 界面状态
+    public var selectedTab: AppTab = .dashboard
+    public var historyQuery = ""
+    public var historyAllBranches = false
+    public var deepSearchActive = false
+    public var commitMessage = ""
+    public var selectedFilePaths: Set<String> = []
+    public var selectedCommit: Commit?
+    public var changedFilesOfSelection: [String] = []
+    public var diffText = ""
+    public var diffFilePath = ""
+    public var stashes: [StashEntry] = []
+    public var tags: [GitTag] = []
+    public var commitDetail: CommitDetail?
+    public var detailDiff = ""
+    public var detailDiffFile = ""
+    public var inProgressOperation: String?
+    public var conflictedFiles: [String] = []
+    public var showDetailPanel = false
+    public var isBusy = false
+    public var busyLabel = ""
+    public var errorMessage: String?
+    public var errorSuggestion: String?
+    public var errorDetail: String?
+    public var notice: String?
+
+    private let git = GitService()
+    private let ssh = SSHKeyService()
+    private let store = RepositoryStore()
+
+    // MARK: 派生数据（纯内存计算，不触发任何 git 命令）
+
+    public var currentRepository: Repository? { repositories.first { $0.id == selectedRepoID } }
+    public var currentPath: String? { currentRepository?.path }
+    public var hasUpstream: Bool { !status.upstream.isEmpty }
+    public var stagedFiles: [FileChange] { status.files.filter(\.isStaged) }
+    public var unstagedFiles: [FileChange] { status.files.filter { !$0.isStaged } }
+    public var localBranches: [Branch] { branches.filter { !$0.isRemote } }
+    public var remoteBranches: [Branch] { branches.filter(\.isRemote) }
+    public var currentBranch: Branch? { branches.first(where: \.isCurrent) }
+
+    /// 历史列表的即时过滤完全在内存完成，输入时零外部进程、零 CPU 尖峰。
+    public var filteredCommits: [Commit] {
+        let query = historyQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if deepSearchActive || query.isEmpty { return commits }
+        let (key, value) = Self.parseLocalQuery(query)
+        let needle = value.lowercased()
+        guard !needle.isEmpty else { return commits }
+        switch key {
+        case "author":
+            return commits.filter { $0.author.lowercased().contains(needle) || $0.email.lowercased().contains(needle) }
+        case "message":
+            return commits.filter { $0.subject.lowercased().contains(needle) || $0.body.lowercased().contains(needle) }
+        case "hash":
+            return commits.filter { $0.hash.lowercased().contains(needle) || $0.shortHash.lowercased().contains(needle) }
+        case "file", "since", "until":
+            // 这些需要走 git 层；输入时先不删行，提示用户点「深度搜索」。
+            return commits
+        default:
+            return commits.filter { $0.searchableText.lowercased().contains(needle) }
+        }
+    }
+
+    public var needsDeepSearch: Bool {
+        let (key, _) = Self.parseLocalQuery(historyQuery)
+        return ["file", "path", "since", "until"].contains(key)
+    }
+
+    public init() {
+        let persisted = store.load()
+        repositories = persisted.repositories
+        platforms = persisted.platforms.isEmpty ? AppConfig.defaultPlatforms : persisted.platforms
+        keyPlatformBindings = persisted.keyPlatformBindings
+        onboardingSeen = persisted.onboardingSeen
+        selectedRepoID = persisted.repositories.first?.id
+        // 启动时集中校验外部工具，缺失时立刻给出可读提示，而不是等到第一次点按钮。
+        do {
+            try AppConfig.validate()
+        } catch let error as AppError {
+            errorMessage = error.friendlyMessage
+            errorSuggestion = error.suggestion
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - 统一执行包装
+
+    /// 等待中的工作用 continuation 挂起，绝不轮询；每个工作结束都唤醒等待者。
+    private var idleWaiters: [CheckedContinuation<Void, Never>] = []
+
+    private func waitForIdle() async {
+        while isBusy {
+            await withCheckedContinuation { continuation in
+                idleWaiters.append(continuation)
+            }
+        }
+    }
+
+    private func signalIdle() {
+        let waiters = idleWaiters
+        idleWaiters = []
+        for waiter in waiters { waiter.resume() }
+    }
+
+    private func perform(_ label: String, refreshOnFailure: Bool = false,
+                         _ operation: @MainActor @escaping () async throws -> Void) async {
+        // 快速切换仓库时，后一次刷新会在这里排队等待，而不是被静默丢弃。
+        await waitForIdle()
+        guard !isBusy else { return }
+        isBusy = true
+        busyLabel = label
+        errorMessage = nil
+        errorSuggestion = nil
+        errorDetail = nil
+        defer {
+            isBusy = false
+            busyLabel = ""
+            signalIdle()
+        }
+        do {
+            try await operation()
+        } catch let error as AppError {
+            errorMessage = error.friendlyMessage
+            errorSuggestion = error.suggestion
+            errorDetail = error.rawDetail
+            AppLogger.error(AppLogger.ui, "operation.failed", detail: ["label": label, "reason": error.friendlyMessage])
+            // 遴选 / 还原冲突会留下 CHERRY_PICK_HEAD，失败后也要刷新，让横幅及时出现。
+            if refreshOnFailure, let path = currentPath {
+                try? await loadAll(at: path, reason: .afterMutation)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            AppLogger.error(AppLogger.ui, "operation.failed", detail: ["label": label, "reason": error.localizedDescription])
+            if refreshOnFailure, let path = currentPath {
+                try? await loadAll(at: path, reason: .afterMutation)
+            }
+        }
+    }
+
+    /// 单次刷新并行拉取 5 类数据，避免串行 N 次进程等待。
+    private func loadAll(at path: String, reason: RefreshReason) async throws {
+        let allBranches = historyAllBranches
+        let bindings = keyPlatformBindings
+        let platformList = platforms
+        async let statusTask = git.status(at: path)
+        async let branchTask = git.branches(at: path)
+        async let remoteTask = git.remotes(at: path)
+        async let logTask = git.log(at: path, allBranches: allBranches)
+        async let keyTask = ssh.listKeys(platforms: platformList, bindings: bindings)
+        async let stashTask = git.stashes(at: path)
+        async let tagTask = git.tags(at: path)
+        // 没有进行中的操作时，这个方法内部直接返回空，不产生额外进程。
+        async let conflictTask = git.conflictedFilesIfNeeded(at: path)
+        let (newStatus, newBranches, newRemotes, newCommits, newKeys, newStashes, newTags, newConflicts) =
+            try await (statusTask, branchTask, remoteTask, logTask, keyTask, stashTask, tagTask, conflictTask)
+
+        status = newStatus
+        branches = newBranches
+        remotes = newRemotes
+        commits = newCommits
+        keys = newKeys
+        stashes = newStashes
+        tags = newTags
+        conflictedFiles = newConflicts
+        // 纯文件检查，不产生额外进程
+        inProgressOperation = git.inProgressOperation(at: path)
+        lastRefreshed = Date()
+        lastRefreshReason = reason.rawValue
+        deepSearchActive = false
+        AppLogger.info(AppLogger.ui, "refreshed", detail: ["reason": reason.rawValue])
+    }
+
+    /// 唯一的刷新入口；调用方只有 5 类事件（见文件头注释）。
+    public func refresh(reason: RefreshReason) async {
+        guard let path = currentPath else {
+            status = .empty
+            branches = []
+            commits = []
+            remotes = []
+            return
+        }
+        await perform("正在读取仓库") {
+            try await self.loadAll(at: path, reason: reason)
+        }
+    }
+
+    /// 写操作：执行成功后自动刷新一次（.afterMutation / .branchSwitch），不引入后台轮询。
+    private func mutate(_ label: String, reason: RefreshReason = .afterMutation,
+                        refreshOnFailure: Bool = false,
+                        _ operation: @MainActor @escaping () async throws -> String) async {
+        await perform(label, refreshOnFailure: refreshOnFailure) {
+            let message = try await operation()
+            if let path = self.currentPath {
+                try await self.loadAll(at: path, reason: reason)
+            }
+            if !message.isEmpty { self.notice = message }
+        }
+    }
+
+    // MARK: - 仓库维护
+
+    public func selectRepository(_ id: UUID) {
+        guard selectedRepoID != id else { return }
+        selectedRepoID = id
+        resetSelections()
+        save()
+        Task { await refresh(reason: .repositorySwitch) }
+    }
+
+    public func addRepository(at rawPath: String) async {
+        let path = RepositoryStore.normalized(rawPath)
+        guard !repositories.contains(where: { $0.path == path }) else {
+            notice = "这个仓库已经在侧边栏了"
+            return
+        }
+        guard (try? await git.isRepository(path)) == true else {
+            presentError(.notARepository(path))
+            return
+        }
+        let repository = Repository(name: URL(fileURLWithPath: path).lastPathComponent, path: path)
+        repositories.append(repository)
+        selectedRepoID = repository.id
+        resetSelections()
+        save()
+        await refresh(reason: .repositorySwitch)
+    }
+
+    /// 批量导入：用户点「扫描文件夹」时才遍历磁盘，最多 3 层 / 40 个仓库。
+    public func scanFolder(_ rawPath: String) async {
+        let path = RepositoryStore.normalized(rawPath)
+        let found = git.discoverRepositories(in: path)
+        guard !found.isEmpty else {
+            notice = "这个文件夹下没找到 Git 仓库（最多向下找 3 层）"
+            return
+        }
+        var added = 0
+        for var repository in found {
+            repository.path = RepositoryStore.normalized(repository.path)
+            guard !repositories.contains(where: { $0.path == repository.path }) else { continue }
+            repositories.append(repository)
+            added += 1
+        }
+        if selectedRepoID == nil { selectedRepoID = repositories.first?.id }
+        save()
+        notice = "找到 \(found.count) 个仓库，新增 \(added) 个"
+        await refresh(reason: .repositorySwitch)
+    }
+
+    public func removeRepository(_ id: UUID) {
+        repositories.removeAll { $0.id == id }
+        if selectedRepoID == id {
+            selectedRepoID = repositories.first?.id
+            resetSelections()
+        }
+        save()
+        Task { await refresh(reason: .repositorySwitch) }
+    }
+
+    public func createRepository(at rawPath: String) async {
+        let path = RepositoryStore.normalized(rawPath)
+        await perform("正在新建仓库") {
+            try await self.git.initializeRepository(at: path)
+        }
+        await addRepository(at: path)
+    }
+
+    public func cloneRepository(from url: String, into folder: String) async {
+        let name = Self.repositoryName(from: url)
+        let destination = RepositoryStore.normalized((folder as NSString).appendingPathComponent(name))
+        await perform("正在克隆仓库") {
+            try await self.git.clone(from: url, to: destination)
+        }
+        guard errorMessage == nil else { return }
+        await addRepository(at: destination)
+    }
+
+    // MARK: - 分支
+
+    public func checkout(_ branch: Branch) async {
+        guard let path = currentPath, !branch.isCurrent else { return }
+        await mutate("正在切换分支", reason: .branchSwitch) {
+            try await self.git.checkout(branch.name, at: path)
+            return "已切换到 \(branch.displayName)"
+        }
+    }
+
+    public func createBranch(_ name: String) async {
+        guard let path = currentPath else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            presentError(.invalidInput("请填写分支名"))
+            return
+        }
+        await mutate("正在新建分支", reason: .branchSwitch) {
+            try await self.git.createBranch(trimmed, at: path)
+            return "已创建并切换到 \(trimmed)"
+        }
+    }
+
+    // MARK: - 暂存 / 提交
+
+    public func toggleFile(_ path: String) {
+        if selectedFilePaths.contains(path) { selectedFilePaths.remove(path) }
+        else { selectedFilePaths.insert(path) }
+    }
+
+    public func stageSelected() async {
+        guard let path = currentPath, !selectedFilePaths.isEmpty else { return }
+        let paths = Array(selectedFilePaths)
+        await mutate("正在暂存") {
+            try await self.git.stage(paths: paths, at: path)
+            self.selectedFilePaths = []
+            return "已暂存 \(paths.count) 个文件"
+        }
+    }
+
+    public func unstageSelected() async {
+        guard let path = currentPath, !selectedFilePaths.isEmpty else { return }
+        let paths = selectedFilePaths.compactMap { selected in
+            status.files.first(where: { $0.path == selected && $0.isStaged })?.path
+        }
+        guard !paths.isEmpty else {
+            presentError(.invalidInput("未跟踪文件没有暂存记录，无需取消暂存"))
+            return
+        }
+        await mutate("正在取消暂存") {
+            try await self.git.unstage(paths: paths, at: path)
+            self.selectedFilePaths = []
+            return "已取消暂存 \(paths.count) 个文件"
+        }
+    }
+
+    public func stageAll() async {
+        guard let path = currentPath else { return }
+        await mutate("正在暂存全部") {
+            try await self.git.stageAll(at: path)
+            self.selectedFilePaths = []
+            return "已暂存全部改动"
+        }
+    }
+
+    public func unstageAll() async {
+        guard let path = currentPath else { return }
+        await mutate("正在取消全部暂存") {
+            try await self.git.unstageAll(at: path)
+            return "已取消全部暂存"
+        }
+    }
+
+    public func discardSelected() async {
+        guard let path = currentPath, !selectedFilePaths.isEmpty else { return }
+        let paths = Array(selectedFilePaths)
+        await mutate("正在丢弃改动") {
+            try await self.git.discard(paths: paths, at: path)
+            self.selectedFilePaths = []
+            return "已丢弃 \(paths.count) 个文件的改动"
+        }
+    }
+
+    public func commit(andPush: Bool = false) async {
+        guard let path = currentPath else { return }
+        let message = commitMessage
+        let branch = status.branch
+        let upstream = hasUpstream
+        let remote = remotes.first?.name ?? "origin"
+        await mutate(andPush ? "正在提交并推送" : "正在提交") {
+            let hash = try await self.git.commit(message: message, at: path)
+            if andPush {
+                try await self.git.push(at: path, branch: branch, remote: remote, hasUpstream: upstream)
+            }
+            self.commitMessage = ""
+            self.selectedFilePaths = []
+            return andPush ? "提交 \(hash) 已推送到 \(remote)" : "提交成功 \(hash)"
+        }
+    }
+
+    /// 工作台的「一键提交全部并推送」：无提交说明时自动生成一句简洁描述。
+    public func quickCommitAll() async {
+        guard let path = currentPath else { return }
+        if commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            commitMessage = "chore: 更新 \(status.files.count) 个文件"
+        }
+        let message = commitMessage
+        let branch = status.branch
+        let upstream = hasUpstream
+        let remote = remotes.first?.name ?? "origin"
+        await mutate("正在一键提交") {
+            try await self.git.stageAll(at: path)
+            let hash = try await self.git.commit(message: message, at: path)
+            try await self.git.push(at: path, branch: branch, remote: remote, hasUpstream: upstream)
+            self.commitMessage = ""
+            self.selectedFilePaths = []
+            return "已提交 \(hash) 并推送到 \(remote)"
+        }
+    }
+
+    public func loadDiff(for file: FileChange) async {
+        guard let path = currentPath else { return }
+        diffFilePath = file.path
+        await perform("正在读取差异") {
+            self.diffText = try await self.git.diff(for: file.path, staged: file.isStaged, at: path)
+        }
+    }
+
+    // MARK: - 同步
+
+    public func pull() async {
+        guard let path = currentPath else { return }
+        await mutate("正在拉取") {
+            try await self.git.pull(at: path)
+            return "拉取完成"
+        }
+    }
+
+    public func fetch() async {
+        guard let path = currentPath else { return }
+        await mutate("正在抓取") {
+            try await self.git.fetch(at: path)
+            return "抓取完成"
+        }
+    }
+
+    public func push() async {
+        guard let path = currentPath else { return }
+        let branch = status.branch
+        let upstream = hasUpstream
+        let remote = remotes.first?.name ?? "origin"
+        await mutate("正在推送") {
+            try await self.git.push(at: path, branch: branch, remote: remote, hasUpstream: upstream)
+            return upstream ? "已推送到 \(remote)" : "已推送并建立 \(remote)/\(branch) 关联"
+        }
+    }
+
+    // MARK: - 历史
+
+    public func deepSearch() async {
+        guard let path = currentPath else { return }
+        await perform("正在搜索历史") {
+            self.commits = try await self.git.log(
+                at: path, query: self.historyQuery,
+                allBranches: self.historyAllBranches, limit: 500
+            )
+            self.deepSearchActive = true
+            self.lastRefreshReason = RefreshReason.deepSearch.rawValue
+        }
+    }
+
+    public func selectCommit(_ commit: Commit) async {
+        await openDetail(for: commit)
+    }
+
+    public func historyQueryChanged() {
+        deepSearchActive = false
+    }
+
+    // MARK: - 遴选 / 还原 / 冲突中止
+
+    public func cherryPick(_ commit: Commit) async {
+        guard let path = currentPath else { return }
+        await mutate("正在遴选提交", refreshOnFailure: true) {
+            try await self.git.cherryPick(commit.hash, at: path)
+            return "已把 \(commit.shortHash)「\(commit.subject)」遴选到当前分支"
+        }
+    }
+
+    public func revert(_ commit: Commit) async {
+        guard let path = currentPath else { return }
+        await mutate("正在还原提交", refreshOnFailure: true) {
+            try await self.git.revert(commit.hash, at: path)
+            return "已生成一条反向提交，撤销 \(commit.shortHash) 的改动"
+        }
+    }
+
+    public func abortOperation() async {
+        guard let path = currentPath else { return }
+        await mutate("正在中止操作") {
+            try await self.git.abortOperation(at: path)
+            return "已中止，工作区回到操作前"
+        }
+    }
+
+    public func resolveConflict(_ file: String, choose: GitService.ConflictResolution) async {
+        guard let path = currentPath else { return }
+        await mutate("正在解决冲突") {
+            try await self.git.resolveConflict(filePath: file, choose: choose, at: path)
+            return "已采用\(choose == .ours ? "当前分支" : "对方提交")的版本并暂存：\(file)"
+        }
+    }
+
+    public func markConflictResolved(_ file: String) async {
+        guard let path = currentPath else { return }
+        await mutate("正在标记冲突已解决") {
+            try await self.git.markConflictResolved(filePath: file, at: path)
+            return "已标记为解决：\(file)"
+        }
+    }
+
+    public func continueOperation() async {
+        guard let path = currentPath else { return }
+        await mutate("正在继续操作", refreshOnFailure: true) {
+            try await self.git.continueOperation(at: path)
+            return "冲突处理完成，操作已继续"
+        }
+    }
+
+    // MARK: - 储藏
+
+    public func stashPush(message: String = "", includeUntracked: Bool = true) async {
+        guard let path = currentPath else { return }
+        await mutate("正在储藏改动") {
+            try await self.git.stashPush(at: path, message: message, includeUntracked: includeUntracked)
+            return "改动已储藏，工作区已恢复干净"
+        }
+    }
+
+    public func stashApply(_ entry: StashEntry, dropAfterApply: Bool = false) async {
+        guard let path = currentPath else { return }
+        await mutate("正在恢复储藏") {
+            try await self.git.stashApply(entry.reflogID, at: path, dropAfterApply: dropAfterApply)
+            return dropAfterApply ? "已恢复并移除该储藏" : "已恢复改动（储藏记录仍保留）"
+        }
+    }
+
+    public func stashDrop(_ entry: StashEntry) async {
+        guard let path = currentPath else { return }
+        await mutate("正在删除储藏") {
+            try await self.git.stashDrop(entry.reflogID, at: path)
+            return "已删除 \(entry.reflogID)"
+        }
+    }
+
+    // MARK: - 标签与分支
+
+    public func addTag(_ name: String, to hash: String = "", message: String = "") async {
+        guard let path = currentPath else { return }
+        await mutate("正在打标签") {
+            try await self.git.addTag(name, to: hash, message: message, at: path)
+            return "已创建标签 \(name)"
+        }
+    }
+
+    public func deleteTag(_ name: String) async {
+        guard let path = currentPath else { return }
+        await mutate("正在删除标签") {
+            try await self.git.deleteTag(name, at: path)
+            return "已删除标签 \(name)（仅本地）"
+        }
+    }
+
+    public func deleteBranch(_ name: String, force: Bool = false) async {
+        guard let path = currentPath else { return }
+        await mutate("正在删除分支", reason: .branchSwitch) {
+            try await self.git.deleteBranch(name, at: path, force: force)
+            return "已删除分支 \(name)"
+        }
+    }
+
+    // MARK: - 提交详情
+
+    public func openDetail(for commit: Commit) async {
+        selectedCommit = commit
+        showDetailPanel = true
+        commitDetail = nil
+        detailDiff = ""
+        detailDiffFile = ""
+        changedFilesOfSelection = []
+        guard let path = currentPath else { return }
+        await perform("正在读取提交详情") {
+            let detail = try await self.git.commitDetail(commit.hash, at: path)
+            self.commitDetail = detail
+            self.changedFilesOfSelection = detail.changedFiles.map(\.path)
+        }
+    }
+
+    public func closeDetail() {
+        showDetailPanel = false
+    }
+
+    public func loadDetailDiff(file: String) async {
+        guard let path = currentPath, let hash = selectedCommit?.hash else { return }
+        detailDiffFile = file
+        await perform("正在读取文件差异") {
+            self.detailDiff = try await self.git.diffInCommit(hash, file: file, at: path)
+        }
+    }
+
+    // MARK: - 远程源
+
+    public func addRemote(name: String, url: String) async {
+        guard let path = currentPath else { return }
+        await mutate("正在添加远程源") {
+            try await self.git.addRemote(name: name, url: url, at: path)
+            return "已添加远程源 \(name)"
+        }
+    }
+
+    public func setRemoteURL(name: String, url: String) async {
+        guard let path = currentPath else { return }
+        await mutate("正在更新地址") {
+            try await self.git.setRemoteURL(name: name, url: url, at: path)
+            return "已更新 \(name) 的地址"
+        }
+    }
+
+    public func renameRemote(from old: String, to new: String) async {
+        guard let path = currentPath else { return }
+        await mutate("正在重命名") {
+            try await self.git.renameRemote(from: old, to: new, at: path)
+            return "已重命名为 \(new)"
+        }
+    }
+
+    public func removeRemote(_ name: String) async {
+        guard let path = currentPath else { return }
+        await mutate("正在删除远程源") {
+            try await self.git.removeRemote(name: name, at: path)
+            return "已删除远程源 \(name)"
+        }
+    }
+
+    // MARK: - 密钥
+
+    public func generateKey(for platform: GitPlatform, email: String, passphrase: String) async {
+        await perform("正在生成密钥") {
+            let key = try await self.ssh.generateKey(for: platform, email: email, passphrase: passphrase)
+            self.keyPlatformBindings[key.publicKeyPath] = platform.id
+            self.save()
+            self.keys = try await self.ssh.listKeys(
+                platforms: self.platforms, bindings: self.keyPlatformBindings
+            )
+            self.notice = "已为 \(platform.name) 生成 ED25519 密钥，请复制公钥到平台"
+        }
+    }
+
+    public func bindKey(_ key: SSHKeyPair, to platformID: String) {
+        keyPlatformBindings[key.publicKeyPath] = platformID
+        save()
+        if let index = keys.firstIndex(where: { $0.id == key.id }) {
+            keys[index].platformID = platformID
+        }
+        notice = "已归类到 \(platformName(platformID))"
+    }
+
+    public func publicKeyContent(_ key: SSHKeyPair) -> String {
+        (try? ssh.publicKeyContent(key)) ?? ""
+    }
+
+    public func testConnection(platform: GitPlatform, key: SSHKeyPair) async {
+        await perform("正在测试连接") {
+            self.notice = try await self.ssh.testConnection(platform: platform, key: key)
+        }
+    }
+
+    public func applySSHConfig() async {
+        await perform("正在写入 SSH 配置") {
+            try self.ssh.applyConfig(keys: self.keys, platforms: self.platforms)
+            self.notice = "已写入 ~/.ssh/config（原文件已备份为 config.gitglass.bak）"
+        }
+    }
+
+    public func fixKeyPermissions(_ key: SSHKeyPair) async {
+        await perform("正在修复权限") {
+            try self.ssh.fixPermissions(key)
+            self.keys = try await self.ssh.listKeys(
+                platforms: self.platforms, bindings: self.keyPlatformBindings
+            )
+            self.notice = "私钥权限已改为 600"
+        }
+    }
+
+    public func addCustomPlatform(name: String, host: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty, !trimmedHost.isEmpty else {
+            presentError(.invalidInput("平台名称和服务器域名都要填写"))
+            return
+        }
+        let id = "custom-" + UUID().uuidString.prefix(8)
+        platforms.append(GitPlatform(id: id, name: trimmedName, host: trimmedHost,
+                                     symbol: "server.rack", isCustom: true))
+        save()
+        notice = "已添加平台 \(trimmedName)"
+    }
+
+    public func keys(for platformID: String) -> [SSHKeyPair] {
+        keys.filter { $0.platformID == platformID }
+    }
+
+    public func platformName(_ id: String) -> String {
+        platforms.first(where: { $0.id == id })?.name ?? "其他 / 自建"
+    }
+
+    // MARK: - 提示与引导
+
+    public func dismissError() {
+        errorMessage = nil
+        errorSuggestion = nil
+        errorDetail = nil
+    }
+
+    public func dismissNotice() { notice = nil }
+
+    public func completeOnboarding() {
+        onboardingSeen = true
+        save()
+    }
+
+    public func appendCommitPrefix(_ prefix: String) {
+        let trimmed = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            commitMessage = prefix + ": "
+        } else if !trimmed.hasPrefix(prefix + ":") {
+            commitMessage = prefix + ": " + trimmed
+        }
+    }
+
+    // MARK: - 内部
+
+    private func resetSelections() {
+        selectedFilePaths = []
+        selectedCommit = nil
+        changedFilesOfSelection = []
+        diffText = ""
+        diffFilePath = ""
+        stashes = []
+        tags = []
+        commitDetail = nil
+        detailDiff = ""
+        detailDiffFile = ""
+        inProgressOperation = nil
+        conflictedFiles = []
+        showDetailPanel = false
+        historyQuery = ""
+        deepSearchActive = false
+        status = .empty
+        commits = []
+        branches = []
+        remotes = []
+    }
+
+    private func save() {
+        do {
+            try store.save(PersistedState(
+                repositories: repositories,
+                platforms: platforms,
+                keyPlatformBindings: keyPlatformBindings,
+                onboardingSeen: onboardingSeen
+            ))
+        } catch {
+            AppLogger.error(AppLogger.store, "state.save_failed", detail: ["reason": error.localizedDescription])
+        }
+    }
+
+    private func presentError(_ error: AppError) {
+        errorMessage = error.friendlyMessage
+        errorSuggestion = error.suggestion
+        errorDetail = error.rawDetail
+    }
+
+    private static func parseLocalQuery(_ query: String) -> (String, String) {
+        for key in ["author", "message", "file", "path", "hash", "since", "until"] {
+            let prefix = key + ":"
+            if query.lowercased().hasPrefix(prefix) {
+                return (key, String(query.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces))
+            }
+        }
+        return ("text", query)
+    }
+
+    private static func repositoryName(from url: String) -> String {
+        let last = url.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .split(separator: "/").last ?? "repository"
+        let cleaned = String(last).replacingOccurrences(of: ".git", with: "")
+        return cleaned.isEmpty ? "repository" : cleaned
+    }
+}
