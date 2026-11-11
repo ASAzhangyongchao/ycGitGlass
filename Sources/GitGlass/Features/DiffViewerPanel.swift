@@ -15,7 +15,7 @@ struct DiffViewerPanel: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 340, idealWidth: 460, maxWidth: .infinity)
+        .frame(minWidth: 300, idealWidth: 460, maxWidth: .infinity)
         .frame(maxHeight: .infinity)
         .glassSurface(cornerRadius: 18, tint: GlassPalette.blue.opacity(0.05))
         .cardShadow(elevated: true)

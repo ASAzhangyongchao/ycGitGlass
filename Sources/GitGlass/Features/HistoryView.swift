@@ -43,8 +43,19 @@ struct HistoryView: View {
     }
 
     private var searchBar: some View {
-        // 单行统一工具条：搜索 + 筛选 + 统计都在一条玻璃条里，
-        // 与右侧详情面板顶部对齐，不再三行割裂。
+        // 单行统一工具条：搜索 + 筛选 + 统计都在一条玻璃条里。
+        // ViewThatFits：窗口窄时自动降级为紧凑版（作者/排序收进「筛选」菜单），
+        // 永不溢出换行。
+        ViewThatFits(in: .horizontal) {
+            toolbar(compact: false)
+            toolbar(compact: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 12)
+    }
+
+    private func toolbar(compact: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
@@ -69,17 +80,43 @@ struct HistoryView: View {
 
             Divider().frame(height: 14).opacity(0.5)
 
-            authorMenu
-            sortMenu
+            if compact {
+                Menu {
+                    Section("作者") {
+                        ForEach(state.availableAuthors.prefix(20), id: \.name) { entry in
+                            Button("\(entry.name) (\(entry.count))") { state.toggleAuthorFilter(entry.name) }
+                        }
+                    }
+                    Section("排序") {
+                        ForEach(HistorySort.allCases, id: \.self) { sort in
+                            Button(sort.rawValue) { state.historySort = sort }
+                        }
+                    }
+                    Divider()
+                    Toggle("全部分支", isOn: Binding(
+                        get: { state.historyAllBranches },
+                        set: { state.historyAllBranches = $0 }
+                    ))
+                } label: {
+                    Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("作者 / 排序 / 全部分支（窗口较窄时的紧凑模式）")
+            } else {
+                authorMenu
+                sortMenu
 
-            Toggle("全部分支", isOn: Binding(
-                get: { state.historyAllBranches },
-                set: { state.historyAllBranches = $0 }
-            ))
-            .toggleStyle(.checkbox)
-            .font(.system(size: 11))
-            .onChange(of: state.historyAllBranches) { _, _ in
-                Task { await state.refresh(reason: .manual) }
+                Toggle("全部分支", isOn: Binding(
+                    get: { state.historyAllBranches },
+                    set: { state.historyAllBranches = $0 }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+                .onChange(of: state.historyAllBranches) { _, _ in
+                    Task { await state.refresh(reason: .manual) }
+                }
             }
 
             Spacer(minLength: 8)
@@ -112,9 +149,6 @@ struct HistoryView: View {
                 .help("扫描完整历史（按文件、日期范围搜索时需要）")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .glassSurface(cornerRadius: 12)
     }
 
     /// 行高与轨道列共用，保证节点与行内容严格对齐。

@@ -30,7 +30,7 @@ struct CommitDetailPanel: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 350, idealWidth: 380, maxWidth: 400)
+        .frame(minWidth: 300, idealWidth: 360, maxWidth: 380)
         .glassSurface(cornerRadius: 20, tint: GlassPalette.blue.opacity(0.06))
         .cardShadow(elevated: true)
         .panelTransition()
