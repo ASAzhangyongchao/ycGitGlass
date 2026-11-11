@@ -8,16 +8,20 @@ struct GlassCard<Content: View>: View {
     var title: String? = nil
     var icon: String? = nil
     var subtitle: String? = nil
+    /// 长说明收进标题行的小问号弹泡，不再独占一行。
+    var help: String? = nil
     var tint: Color? = nil
     var padding: CGFloat = 18
     @ViewBuilder var content: Content
+    @State private var showHelp = false
 
     init(title: String? = nil, icon: String? = nil, subtitle: String? = nil,
-         tint: Color? = nil, padding: CGFloat = 18,
+         help: String? = nil, tint: Color? = nil, padding: CGFloat = 18,
          @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.subtitle = subtitle
+        self.help = help
         self.tint = tint
         self.padding = padding
         self.content = content()
@@ -25,7 +29,7 @@ struct GlassCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if title != nil || subtitle != nil {
+            if title != nil || subtitle != nil || help != nil {
                 HStack(alignment: .firstTextBaseline, spacing: 9) {
                     if let icon {
                         Image(systemName: icon)
@@ -41,6 +45,24 @@ struct GlassCard<Content: View>: View {
                         }
                     }
                     Spacer(minLength: 0)
+                    if let help {
+                        Button {
+                            showHelp.toggle()
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showHelp, arrowEdge: .bottom) {
+                            Text(help)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                                .padding(14)
+                                .frame(width: 268, alignment: .leading)
+                        }
+                        .help(help)
+                    }
                 }
             }
             content

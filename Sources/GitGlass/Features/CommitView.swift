@@ -6,6 +6,7 @@ struct CommitView: View {
     @Environment(AppState.self) private var state
     @State private var showDiscardConfirm = false
     @State private var treeMode = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let prefixes = ["feat", "fix", "docs", "refactor", "test", "chore"]
 
@@ -16,14 +17,17 @@ struct CommitView: View {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        composer
                         HStack(alignment: .top, spacing: 18) {
                             fileList
                             diffPanel
                         }
                     }
                     .padding(.vertical, 6)
+                    .padding(.bottom, 4)
                 }
+                // 提交说明卡钉在底部：文件区先滚动，写说明和提交按钮常驻可见
+                composer
+                    .padding(.top, 2)
                 // 底部固定刷新信息条（不再随内容滚动，也给底部留出呼吸空间）
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.horizontal.fill").font(.system(size: 9))
@@ -55,23 +59,43 @@ struct CommitView: View {
 
     // MARK: 提交说明
 
+    /// 输入框默认单行高（36），聚焦后撑到多行（110），失焦回落。
+    @FocusState private var commitEditorFocused: Bool
+
     private var composer: some View {
         GlassCard(title: "写一句提交说明", icon: "square.and.pencil",
-                  subtitle: "说清「做了什么」即可，例如：修复登录页空白") {
+                  help: "说清「做了什么」即可，例如：修复登录页空白。\n也可先点一个快捷前缀（feat/fix/…），再补一句说明。写完点右下「提交」或「提交并推送」。") {
             VStack(alignment: .leading, spacing: 11) {
-                TextEditor(text: Binding(
-                    get: { state.commitMessage },
-                    set: { state.commitMessage = $0 }
-                ))
-                .font(.system(size: 13))
-                .frame(height: 62)
-                .padding(6)
-                .scrollContentBackground(.hidden)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: Binding(
+                        get: { state.commitMessage },
+                        set: { state.commitMessage = $0 }
+                    ))
+                    .font(.system(size: 13))
+                    .focused($commitEditorFocused)
+                    .frame(height: commitEditorFocused ? 110 : 36)
+                    .padding(6)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(commitEditorFocused
+                                    ? GlassPalette.accent.opacity(0.45)
+                                    : Color.primary.opacity(0.08),
+                                    lineWidth: commitEditorFocused ? 1.5 : 1)
+                    )
+                    .animation(reduceMotion ? nil : Motion.snappy, value: commitEditorFocused)
+
+                    // 占位提示
+                    if state.commitMessage.isEmpty && !commitEditorFocused {
+                        Text("一句提交说明，点此处展开…")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .allowsHitTesting(false)
+                    }
+                }
 
                 HStack(spacing: 7) {
                     Text("快捷前缀").font(.system(size: 11)).foregroundStyle(.secondary)
