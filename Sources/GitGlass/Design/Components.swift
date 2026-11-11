@@ -107,6 +107,8 @@ struct ActionButton: View {
     let icon: String
     var tint: Color? = nil
     var prominent = false
+    /// 紧凑模式：图标+更小字号+收紧内边距，用于一行要放下多个按钮的场景
+    var compact = false
     var disabled = false
     var helpText = ""
     let action: () -> Void
@@ -121,17 +123,24 @@ struct ActionButton: View {
             }
         }
         .disabled(disabled)
-        .hoverLift(hovering && !disabled)
+        .hoverLift(hovering && !disabled, scale: compact ? 1.015 : 1.02)
         .onHover { hovering = $0 }
         .help(helpText.isEmpty ? title : helpText)
     }
 
     private var baseButton: some View {
         Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 12.5, weight: .semibold))
-                .padding(.horizontal, 11)
-                .padding(.vertical, 7)
+            if compact {
+                // 紧凑：仅图标，尺寸 12，提示文字放 help
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 24)
+            } else {
+                Label(title, systemImage: icon)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+            }
         }
     }
 }

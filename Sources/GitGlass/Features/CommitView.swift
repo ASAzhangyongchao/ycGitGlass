@@ -68,27 +68,38 @@ struct CommitView: View {
                     Spacer(minLength: 0)
                 }
 
-                // 暂存操作一行；提交动作独立一行——避免窄窗口 6 个按钮挤成一团
-                HStack(spacing: 8) {
-                    ActionButton(title: "暂存所选 (\(state.selectedFilePaths.count))", icon: "plus.circle") {
+                // 暂存操作：紧凑图标按钮一行放下，文字提示在悬停 help
+                HStack(spacing: 6) {
+                    ActionButton(title: "暂存所选 (\(state.selectedFilePaths.count))", icon: "plus.circle",
+                                 compact: true) {
                         Task { await state.stageSelected() }
                     }
                     .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
+                    .help("暂存所选 (\(state.selectedFilePaths.count))")
 
-                    ActionButton(title: "取消暂存", icon: "minus.circle") {
+                    ActionButton(title: "取消暂存", icon: "minus.circle", compact: true) {
                         Task { await state.unstageSelected() }
                     }
                     .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
+                    .help("取消暂存所选")
 
-                    ActionButton(title: "暂存全部", icon: "checkmark.circle") {
+                    ActionButton(title: "暂存全部", icon: "checkmark.circle", compact: true) {
                         Task { await state.stageAll() }
                     }
                     .disabled(state.status.isClean || state.isBusy)
+                    .help("暂存全部改动")
+
+                    ActionButton(title: "储藏当前改动", icon: "archivebox", compact: true) {
+                        Task { await state.stashPush() }
+                    }
+                    .disabled(state.isBusy || state.status.isClean)
+                    .help("储藏当前改动，切分支或遴选前很方便")
 
                     Spacer(minLength: 0)
                 }
 
-                HStack(spacing: 8) {
+                // 提交动作行
+                HStack(spacing: 6) {
                     if state.status.stagedCount == 0 {
                         Text("先勾选文件暂存，提交按钮才会亮")
                             .font(.system(size: 10))
@@ -181,18 +192,13 @@ struct CommitView: View {
                         }
                     }
                     HStack(spacing: 8) {
-                        ActionButton(title: "储藏当前改动", icon: "archivebox") {
-                            Task { await state.stashPush() }
-                        }
-                        .disabled(state.isBusy)
-                        .help("临时收起改动，切分支或遴选前很方便；到「储藏」页恢复")
-                        Spacer()
                         Button("丢弃所选改动") { showDiscardConfirm = true }
                             .buttonStyle(.plain)
                             .font(.system(size: 11))
                             .foregroundStyle(GlassPalette.rose)
                             .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
                             .help("危险操作，会二次确认")
+                        Spacer()
                     }
                 }
             }
