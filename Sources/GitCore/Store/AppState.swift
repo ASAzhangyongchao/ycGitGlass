@@ -518,6 +518,16 @@ public final class AppState {
         }
     }
 
+    /// 丢弃全部改动（已暂存 + 未暂存 + 未跟踪），UI 二次确认后调用。
+    public func discardAllChanges() async {
+        guard let path = currentPath else { return }
+        await mutate("正在丢弃全部改动") {
+            try await self.git.discardAll(at: path)
+            self.selectedFilePaths = []
+            return "已丢弃全部改动，工作区回到最近一次提交"
+        }
+    }
+
     public func commit(andPush: Bool = false) async {
         guard let path = currentPath else { return }
         let message = commitMessage

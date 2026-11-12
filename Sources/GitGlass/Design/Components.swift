@@ -14,6 +14,7 @@ struct GlassCard<Content: View>: View {
     var padding: CGFloat = 18
     @ViewBuilder var content: Content
     @State private var showHelp = false
+    @State private var helpDismissTask: Task<Void, Never>?
 
     init(title: String? = nil, icon: String? = nil, subtitle: String? = nil,
          help: String? = nil, tint: Color? = nil, padding: CGFloat = 18,
@@ -47,7 +48,7 @@ struct GlassCard<Content: View>: View {
                     Spacer(minLength: 0)
                     if let help {
                         Button {
-                            showHelp.toggle()
+                            showHelp = true
                         } label: {
                             Image(systemName: "questionmark.circle")
                                 .font(.system(size: 12, weight: .medium))
@@ -60,8 +61,31 @@ struct GlassCard<Content: View>: View {
                                 .foregroundStyle(.secondary)
                                 .padding(14)
                                 .frame(width: 268, alignment: .leading)
+                                .onHover { hovering in
+                                    // 悬停时保持显示；离开后 1.2 秒收起
+                                    if hovering {
+                                        helpDismissTask?.cancel()
+                                    } else {
+                                        helpDismissTask?.cancel()
+                                        helpDismissTask = Task { @MainActor in
+                                            try? await Task.sleep(for: .seconds(1.2))
+                                            if !Task.isCancelled { showHelp = false }
+                                        }
+                                    }
+                                }
                         }
                         .help(help)
+                        .onChange(of: showHelp) { _, shown in
+                            // 打开 8 秒后自动消失（事件任务，非 Timer）
+                            helpDismissTask?.cancel()
+                            if shown {
+                                helpDismissTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .seconds(8))
+                                    if !Task.isCancelled { showHelp = false }
+                                }
+                            }
+                        }
+                        .onDisappear { helpDismissTask?.cancel() }
                     }
                 }
             }

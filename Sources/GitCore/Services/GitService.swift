@@ -229,6 +229,14 @@ public struct GitService: Sendable {
         _ = try await run(path, ["restore", "--"] + paths)
     }
 
+    /// 丢弃全部改动（已暂存 + 未暂存 + 未跟踪）。危险操作，UI 必须二次确认。
+    public func discardAll(at path: String) async throws {
+        // 重置已暂存 + 还原已跟踪文件的修改
+        _ = try await run(path, ["reset", "--hard", "HEAD"])
+        // 清掉未跟踪文件与目录（不动 .gitignore 忽略的内容）
+        _ = try await run(path, ["clean", "-fd"])
+    }
+
     // MARK: - 同步
 
     public func push(at path: String, branch: String, remote: String = "origin", hasUpstream: Bool = true) async throws {

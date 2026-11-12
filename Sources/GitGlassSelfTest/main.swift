@@ -205,6 +205,17 @@ struct GitGlassSelfTest {
             let noConflicts = await git.conflictedFilesIfNeeded(at: repo.path)
             check("无操作时冲突列表为空且不起进程", noConflicts.isEmpty)
 
+            // MARK: B3 丢弃全部
+            section("B3 · 丢弃全部改动")
+            try "discard-target.txt".write(to: repo.appendingPathComponent("discard-target.txt"), atomically: true, encoding: .utf8)
+            try await git.stageAll(at: repo.path)
+            try "改动内容\n".write(to: repo.appendingPathComponent("StagedFile.txt"), atomically: true, encoding: .utf8)
+            try await git.discardAll(at: repo.path)
+            let afterDiscard = try await git.status(at: repo.path)
+            check("丢弃全部后工作区干净", afterDiscard.isClean,
+                  afterDiscard.files.map(\.path).joined(separator: ","))
+            check("未跟踪文件也被清理", !fm.fileExists(atPath: repo.appendingPathComponent("discard-target.txt").path))
+
             // MARK: C 储藏
             section("C · 储藏 Stash")
             try "stash mark\n".write(to: repo.appendingPathComponent("StashNote.txt"),

@@ -5,6 +5,7 @@ import GitCore
 struct CommitView: View {
     @Environment(AppState.self) private var state
     @State private var showDiscardConfirm = false
+    @State private var showDiscardAllConfirm = false
     @State private var treeMode = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -25,6 +26,7 @@ struct CommitView: View {
                     .padding(.vertical, 6)
                     .padding(.bottom, 4)
                 }
+                .onTapGesture { commitEditorFocused = false }
                 // 提交说明卡钉在底部：文件区先滚动，写说明和提交按钮常驻可见
                 composer
                     .padding(.top, 2)
@@ -37,6 +39,14 @@ struct CommitView: View {
                 }
             } message: {
                 Text("这会还原到最近一次提交或暂存的状态，无法撤销。未跟踪的新文件不受影响。")
+            }
+            .alert("确定丢弃全部改动？", isPresented: $showDiscardAllConfirm) {
+                Button("取消", role: .cancel) {}
+                Button("全部丢弃", role: .destructive) {
+                    Task { await state.discardAllChanges() }
+                }
+            } message: {
+                Text("工作区所有改动（含已暂存与未暂存）都会被还原，无法撤销。这是不可恢复的操作。")
             }
         }
     }
@@ -66,32 +76,6 @@ struct CommitView: View {
             .fixedSize()
             .help("插入快捷前缀：feat / fix / docs …")
 
-            // 左：次要操作（暂存/储藏）收进一个菜单
-            Menu {
-                Section("暂存") {
-                    Button("暂存所选 (\(state.selectedFilePaths.count))") {
-                        Task { await state.stageSelected() }
-                    }
-                    .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
-                    Button("暂存全部") { Task { await state.stageAll() } }
-                        .disabled(state.status.isClean || state.isBusy)
-                    Button("取消暂存所选") { Task { await state.unstageSelected() } }
-                        .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
-                }
-                Section("其它") {
-                    Button("储藏当前改动") { Task { await state.stashPush() } }
-                        .disabled(state.isBusy || state.status.isClean)
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 26, height: 26)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("暂存所选 / 全部 / 取消暂存、储藏")
-
             // 中：输入框（默认矮，聚焦撑高）
             ZStack(alignment: .topLeading) {
                 TextEditor(text: Binding(
@@ -100,9 +84,10 @@ struct CommitView: View {
                 ))
                 .font(.system(size: 12.5))
                 .focused($commitEditorFocused)
-                .frame(height: commitEditorFocused ? 88 : 30)
+                .frame(height: commitEditorFocused ? 88 : 30, alignment: .top)
                 .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.top, 7)
+                .padding(.bottom, 3)
                 .scrollContentBackground(.hidden)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(
@@ -115,12 +100,16 @@ struct CommitView: View {
                 .animation(reduceMotion ? nil : Motion.snappy, value: commitEditorFocused)
 
                 if state.commitMessage.isEmpty && !commitEditorFocused {
-                    Text("一句提交说明…")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                        .allowsHitTesting(false)
+                    HStack(spacing: 6) {
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 10))
+                        Text("一句提交说明，点此展开…（⌘⏎ 提交并推送）")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .allowsHitTesting(false)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -157,6 +146,7 @@ struct CommitView: View {
     }
 
 
+
     /// 次要操作小按钮：图标 + 文字，视觉轻但可读（区别于主按钮）。
     private func secondaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -191,11 +181,44 @@ struct CommitView: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
-                        .frame(width: 156)
+                        .frame(width: 140)
                         Spacer(minLength: 0)
                         Text("\(state.status.files.count) 个文件")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.tertiary)
+
+                        // 变更操作统一入口：暂存 / 储藏 / 丢弃都在这
+                        Menu {
+                            Section("暂存") {
+                                Button("暂存所选 (\(state.selectedFilePaths.count))") {
+                                    Task { await state.stageSelected() }
+                                }
+                                .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
+                                Button("暂存全部改动") { Task { await state.stageAll() } }
+                                    .disabled(state.isBusy)
+                                Button("取消暂存所选") { Task { await state.unstageSelected() } }
+                                    .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
+                            }
+                            Section("储藏") {
+                                Button("储藏当前改动") { Task { await state.stashPush() } }
+                                    .disabled(state.isBusy)
+                            }
+                            Section("丢弃（危险，二次确认）") {
+                                Button("丢弃所选改动") { showDiscardConfirm = true }
+                                    .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
+                                Button("丢弃全部改动") { showDiscardAllConfirm = true }
+                                    .disabled(state.isBusy)
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("暂存 / 储藏 / 丢弃：变更操作统一入口")
                     }
                     .animation(Motion.snappy, value: treeMode)
                 }
@@ -221,38 +244,64 @@ struct CommitView: View {
                         }
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                     } else {
+                        // Sourcetree 式强对比分组：色条 + 标题 + 计数 + 底色区分
                         if !state.stagedFiles.isEmpty {
-                            Text("已暂存 · \(state.stagedFiles.count)")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(GlassPalette.mint)
-                            ForEach(Array(state.stagedFiles.enumerated()), id: \.element.id) { index, file in
-                                fileRow(file).staggered(index)
+                            sectionHeader(title: "已暂存", count: state.stagedFiles.count,
+                                          tint: GlassPalette.mint,
+                                          caption: "将进入下次提交")
+                            VStack(spacing: 2) {
+                                ForEach(Array(state.stagedFiles.enumerated()), id: \.element.id) { index, file in
+                                    fileRow(file).staggered(index)
+                                }
                             }
+                            .padding(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(GlassPalette.mint.opacity(0.06),
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                         if !state.unstagedFiles.isEmpty {
-                            Text("未暂存 / 未跟踪 · \(state.unstagedFiles.count)")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(GlassPalette.amber)
-                                .padding(.top, 2)
-                            ForEach(Array(state.unstagedFiles.enumerated()), id: \.element.id) { index, file in
-                                fileRow(file).staggered(index)
+                            sectionHeader(title: "未暂存改动", count: state.unstagedFiles.count,
+                                          tint: GlassPalette.amber,
+                                          caption: "勾选后点 + 暂存")
+                            .padding(.top, state.stagedFiles.isEmpty ? 0 : 10)
+                            VStack(spacing: 2) {
+                                ForEach(Array(state.unstagedFiles.enumerated()), id: \.element.id) { index, file in
+                                    fileRow(file).staggered(index)
+                                }
                             }
+                            .padding(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(GlassPalette.amber.opacity(0.05),
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
-                    }
-                    HStack(spacing: 8) {
-                        Button("丢弃所选改动") { showDiscardConfirm = true }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11))
-                            .foregroundStyle(GlassPalette.rose)
-                            .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
-                            .help("危险操作，会二次确认")
-                        Spacer()
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: 380, maxWidth: .infinity)
+    }
+
+    /// Sourcetree 式分组头：色条 + 标题 + 计数徽标 + 用途说明
+    private func sectionHeader(title: String, count: Int, tint: Color, caption: String) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(tint)
+                .frame(width: 4, height: 14)
+            Text(title)
+                .font(.system(size: 12, weight: .bold))
+            Text("\(count)")
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(tint.opacity(0.14), in: Capsule())
+            Text(caption)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 2)
     }
 
     private func fileRow(_ file: FileChange) -> some View {
