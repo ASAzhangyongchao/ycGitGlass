@@ -16,51 +16,59 @@ struct HistoryView: View {
         if state.currentRepository == nil {
             EmptyStateView(title: "还没有仓库", message: "先在左侧添加一个 Git 仓库。", icon: "clock")
         } else {
-            VStack(alignment: .leading, spacing: 15) {
-                searchBar
-                // 宽度感知三栏策略（探测式）：隐形探测器读取可用宽度，
-                // 不用 GeometryReader 包整棵树（避免约束歧义）。
-                ZStack(alignment: .topLeading) {
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { viewportWidth = geo.size.width }
-                            .onChange(of: geo.size.width) { _, w in viewportWidth = w }
+            // macOS 26 .glassEffect 在约束更新时有系统级崩溃问题（NSViewUpdateConstraints）。
+            // 历史页强制走平面卡片路径（纯色+描边，视觉相近），换取绝对稳定。
+            content
+                .environment(\.glassReduceTransparency, true)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            searchBar
+            // 宽度感知三栏策略（探测式）：隐形探测器读取可用宽度，
+            // 不用 GeometryReader 包整棵树（避免约束歧义）。
+            ZStack(alignment: .topLeading) {
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { viewportWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { _, w in viewportWidth = w }
+                }
+                .frame(height: 0)
+                .allowsHitTesting(false)
+
+                let wide = viewportWidth >= 1240
+                HStack(alignment: .top, spacing: 14) {
+                    GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
+                              help: "彩色轨道 = 分支 / 合并关系；点提交看详情，详情里可定位 / 遴选 / 还原 / 打标签。",
+                              padding: 14) {
+                        historyList
                     }
-                    .frame(height: 0)
-                    .allowsHitTesting(false)
+                    .frame(minWidth: wide ? 360 : 300,
+                           idealWidth: 480,
+                           maxWidth: .infinity, maxHeight: .infinity)
 
-                    let wide = viewportWidth >= 1240
-                    HStack(alignment: .top, spacing: 14) {
-                        GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
-                                  help: "彩色轨道 = 分支 / 合并关系；点提交看详情，详情里可定位 / 遴选 / 还原 / 打标签。",
-                                  padding: 14) {
-                            historyList
+                    ZStack(alignment: .topTrailing) {
+                        if state.showDetailPanel {
+                            CommitDetailPanel()
+                                .frame(maxHeight: .infinity)
                         }
-                        .frame(minWidth: wide ? 360 : 300,
-                               idealWidth: 480,
-                               maxWidth: .infinity, maxHeight: .infinity)
-
-                        ZStack(alignment: .topTrailing) {
-                            if state.showDetailPanel {
-                                CommitDetailPanel()
-                                    .frame(maxHeight: .infinity)
-                            }
-                            // 窄窗口：Diff 覆盖在详情上（带关闭按钮），列表保持可读宽度
-                            if state.showDiffViewer && !wide {
-                                DiffViewerPanel()
-                            }
-                        }
-
-                        // 宽窗口：第三栏并排
-                        if state.showDiffViewer && wide {
+                        // 窄窗口：Diff 覆盖在详情上（带关闭按钮），列表保持可读宽度
+                        if state.showDiffViewer && !wide {
                             DiffViewerPanel()
                         }
                     }
+
+                    // 宽窗口：第三栏并排
+                    if state.showDiffViewer && wide {
+                        DiffViewerPanel()
+                    }
                 }
             }
-            .padding(.vertical, 6)
-            .padding(.bottom, 20)
         }
+        .padding(.vertical, 6)
+        .padding(.bottom, 20)
     }
 
     private var searchBar: some View {
