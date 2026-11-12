@@ -160,23 +160,25 @@ struct CommitDetailPanel: View {
             Text("对这条提交做什么")
                 .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 7) {
-                ActionButton(title: "遴选", icon: "arrow.triangle.merge", prominent: true) {
+            HStack(spacing: 5) {
+                smallActionButton("遴选", icon: "arrow.triangle.merge", tint: GlassPalette.accent) {
                     showCherryPickConfirm = true
                 }
-                .help("Sourcetree 的 Cherry-pick：把这条提交复制到当前分支")
-                ActionButton(title: "还原", icon: "arrow.uturn.backward", tint: GlassPalette.rose) {
+                .help("Cherry-pick：把这条提交的改动复制到当前分支")
+
+                smallActionButton("还原", icon: "arrow.uturn.backward", tint: GlassPalette.rose) {
                     showRevertConfirm = true
                 }
                 .help("生成一条反向提交，撤销这条提交的改动")
-            }
-            HStack(spacing: 7) {
-                ActionButton(title: "定位", icon: "target") {
+
+                smallActionButton("定位", icon: "target", tint: nil) {
                     state.locateSelectedInList()
                 }
                 .help("在左侧列表中定位这条提交：滚动过去并高亮闪烁")
-                ActionButton(title: "打标签", icon: "tag") { showTagSheet = true }
-                ActionButton(title: "复制 hash", icon: "doc.on.doc") {
+
+                smallActionButton("打标签", icon: "tag", tint: nil) { showTagSheet = true }
+
+                smallActionButton("复制hash", icon: "doc.on.doc", tint: nil) {
                     if let hash = state.selectedCommit?.hash {
                         copyToPasteboard(hash)
                         state.notice = "已复制完整提交号"
@@ -185,6 +187,25 @@ struct CommitDetailPanel: View {
             }
         }
         .disabled(state.isBusy)
+    }
+
+    /// 小号操作按钮：一行五个放得下
+    private func smallActionButton(_ title: String, icon: String, tint: Color?,
+                                    action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .medium))
+                Text(title)
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+            .background((tint ?? Color.primary).opacity(tint == nil ? 0.05 : 0.10),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(tint ?? .primary)
     }
 
     private func bodySection(_ body: String) -> some View {

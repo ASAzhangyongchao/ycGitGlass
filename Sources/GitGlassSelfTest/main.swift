@@ -596,6 +596,35 @@ struct GitGlassSelfTest {
                   byAuthor.map(\.author).joined(separator: ","))
             check("排序枚举完整", HistorySort.allCases.count == 4)
 
+            // MARK: M2 本地合并
+            section("M2 · 本地合并")
+            try await git.checkout("feature-merge", at: repo.path, create: true)
+            try "feature line\n".write(to: repo.appendingPathComponent("Feature.txt"), atomically: true, encoding: .utf8)
+            try await git.stageAll(at: repo.path)
+            _ = try await git.commit(message: "feat: feature 分支提交", at: repo.path)
+            try await git.checkout("main", at: repo.path)
+            let preMerge = try await git.log(at: repo.path)
+            check("合并前 main 无 Feature 提交", !preMerge.contains { $0.subject.contains("feature 分支提交") })
+            // 方向一：把 feature-merge 合进 main
+            let mergeState = await MainActor.run { AppState() }
+            await MainActor.run {
+                mergeState.repositories = [Repository(id: UUID(), name: "t", path: repo.path)]
+                mergeState.selectedRepoID = mergeState.repositories.first?.id
+            }
+            // 等待状态就绪（loadAll 由 refresh 触发；merge 只需 currentPath）
+            await mergeState.mergeIntoCurrent("feature-merge")
+            let postMerge = try await git.log(at: repo.path)
+            check("方向一合并后 main 含 feature 提交", postMerge.contains { $0.subject.contains("feature 分支提交") })
+            check("合并后工作区干净", try await git.status(at: repo.path).isClean)
+            // 方向二：把 main 合并到新分支 target
+            try await git.checkout("target-branch", at: repo.path, create: true)
+            try await git.checkout("main", at: repo.path)
+            await mergeState.mergeCurrentInto("target-branch")
+            try await git.checkout("target-branch", at: repo.path)
+            let targetLog = try await git.log(at: repo.path)
+            check("方向二合并后 target 含 main 提交", targetLog.first != nil)
+            try await git.checkout("main", at: repo.path)
+
             // MARK: L 轻量约束 / 模型契约
             section("L · 轻量约束 / 模型契约")
             check("刷新原因均为事件", RefreshReason.manual.rawValue == "手动刷新"

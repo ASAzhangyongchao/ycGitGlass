@@ -766,6 +766,40 @@ public final class AppState {
         }
     }
 
+    /// 方向一：把指定分支的改动合并进当前分支（git merge source）
+    public func mergeIntoCurrent(_ source: String, noFF: Bool = false) async {
+        guard let path = currentPath else { return }
+        let branch = status.branch
+        await mutate("正在把 \(source) 合并进 \(branch)", refreshOnFailure: true) {
+            try await self.git.merge(source, at: path, noFF: noFF)
+            if noFF {
+                return "已合并 \(source) → \(branch)（保留合并提交）"
+            }
+            return "已合并 \(source) → \(branch)"
+        }
+    }
+
+    /// 方向二：把当前分支合并到目标分支（自动 checkout 目标 → merge 当前 → 切回）
+    public func mergeCurrentInto(_ target: String, noFF: Bool = false) async {
+        guard let path = currentPath else { return }
+        let current = status.branch
+        guard !current.isEmpty, current != target else {
+            presentError(.invalidInput("目标分支不能是当前分支"))
+            return
+        }
+        await mutate("正在把 \(current) 合并到 \(target)", refreshOnFailure: true) {
+            try await self.git.checkout(target, at: path)
+            do {
+                try await self.git.merge(current, at: path, noFF: noFF)
+            } catch {
+                // 合并冲突时停在 target 上（用户解决），不自动切回
+                throw error
+            }
+            try await self.git.checkout(current, at: path)
+            return "已把 \(current) 合并到 \(target)，并切回 \(current)"
+        }
+    }
+
     /// 在左侧列表中定位当前选中的提交（滚动 + 高亮闪烁）
     public func locateSelectedInList() {
         guard let commit = selectedCommit else { return }

@@ -10,6 +10,7 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 greeting
+                    .padding(.top, 10)
                 if state.currentRepository == nil {
                     EmptyStateView(
                         title: "先添加一个仓库",

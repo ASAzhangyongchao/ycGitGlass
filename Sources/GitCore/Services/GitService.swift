@@ -156,6 +156,15 @@ public struct GitService: Sendable {
         }
     }
 
+    /// 本地合并：把 source 分支合并进当前所在分支。
+    /// - Parameter noFF: true 时强制生成合并提交（保留分支拓扑）；默认 fast-forward 优先。
+    public func merge(_ source: String, at path: String, noFF: Bool = false) async throws {
+        guard Self.isValidRefName(source) else { throw AppError.invalidInput("分支名不合法") }
+        var args = ["merge", source]
+        if noFF { args.append("--no-ff") }
+        _ = try await run(path, args)
+    }
+
     public func checkout(_ branch: String, at path: String, create: Bool = false) async throws {
         guard Self.isValidRefName(branch) else { throw AppError.invalidInput("分支名不合法") }
         var args = ["checkout"]

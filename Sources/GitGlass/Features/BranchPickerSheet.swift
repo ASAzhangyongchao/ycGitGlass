@@ -238,43 +238,134 @@ struct BranchPickerSheet: View {
 
     // MARK: 行
 
+    @State private var mergeTarget: String?
+    @State private var mergeDirection: MergeDirection?
+    @State private var mergeNoFF = false
+
+    enum MergeDirection: Identifiable {
+        case intoCurrent(String)   // 把某分支合进当前
+        case currentInto(String)   // 把当前合到某分支
+        var id: String {
+            switch self {
+            case .intoCurrent(let s): return "in-\(s)"
+            case .currentInto(let s): return "out-\(s)"
+            }
+        }
+        var otherBranch: String {
+            switch self {
+            case .intoCurrent(let s), .currentInto(let s): return s
+            }
+        }
+    }
+
     private func branchRow(name: String, subtitle: String?, isCurrent: Bool, tint: Color,
                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 9) {
-                Circle()
-                    .fill(isCurrent ? GlassPalette.mint : tint.opacity(0.7))
-                    .frame(width: 6, height: 6)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(.system(size: 12, weight: isCurrent ? .semibold : .regular))
-                        .lineLimit(1)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 9.5, design: .monospaced))
-                            .foregroundStyle(.tertiary)
+        HStack(spacing: 9) {
+            Button(action: action) {
+                HStack(spacing: 9) {
+                    Circle()
+                        .fill(isCurrent ? GlassPalette.mint : tint.opacity(0.7))
+                        .frame(width: 6, height: 6)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name)
+                            .font(.system(size: 12, weight: isCurrent ? .semibold : .regular))
                             .lineLimit(1)
+                        if let subtitle {
+                            Text(subtitle)
+                                .font(.system(size: 9.5, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
-                if isCurrent {
-                    StatusBadge(text: "当前", tint: GlassPalette.mint)
-                } else {
-                    Image(systemName: "arrow.right.circle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help(isCurrent ? "当前分支" : "点按切换到此分支")
+
+            // 合并操作区（当前分支自身不显示）
+            if !isCurrent {
+                mergeMenu(for: name)
+            } else {
+                StatusBadge(text: "当前", tint: GlassPalette.mint)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
         .background(
             Color.primary.opacity(0.035),
             in: RoundedRectangle(cornerRadius: 8, style: .continuous)
         )
-        .help(isCurrent ? "当前分支" : "点按切换到此分支")
+    }
+
+    /// 每行右侧的合并菜单：合入当前 / 合并过去
+    private func mergeMenu(for branch: String) -> some View {
+        Menu {
+            Button {
+                mergeDirection = .intoCurrent(branch)
+            } label: {
+                Label("把 \(branch) 合并进当前分支", systemImage: "arrow.down.right")
+            }
+            Button {
+                mergeDirection = .currentInto(branch)
+            } label: {
+                Label("把当前分支合并到 \(branch)", systemImage: "arrow.up.right")
+            }
+            Divider()
+            Toggle("保留合并提交（--no-ff）", isOn: $mergeNoFF)
+        } label: {
+            Image(systemName: "arrow.triangle.merge")
+                .font(.system(size: 10.5, weight: .medium))
+                .frame(width: 24, height: 22)
+                .background(Color.primary.opacity(0.06),
+                            in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("合并操作：把 \(branch) 合进当前，或把当前合并过去")
+        .confirmationDialog(
+            mergeConfirmTitle,
+            isPresented: Binding(
+                get: { mergeTarget == nil && mergeDirection != nil },
+                set: { if !$0 { mergeDirection = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("合并", role: .destructive) {
+                if let dir = mergeDirection {
+                    switch dir {
+                    case .intoCurrent(let b):
+                        Task { await state.mergeIntoCurrent(b, noFF: mergeNoFF) }
+                    case .currentInto(let b):
+                        Task { await state.mergeCurrentInto(b, noFF: mergeNoFF) }
+                    }
+                }
+                mergeDirection = nil
+            }
+            Button("取消", role: .cancel) { mergeDirection = nil }
+        } message: {
+            Text(mergeConfirmMessage)
+        }
+    }
+
+    private var mergeConfirmTitle: String {
+        guard let dir = mergeDirection else { return "合并" }
+        switch dir {
+        case .intoCurrent(let b): return "把 \(b) 合并进当前分支？"
+        case .currentInto(let b): return "把当前分支合并到 \(b)？"
+        }
+    }
+
+    private var mergeConfirmMessage: String {
+        guard let dir = mergeDirection else { return "" }
+        let ff = mergeNoFF ? "将生成一条合并提交（--no-ff）。" : "能快进时直接快进，不产生合并提交。"
+        switch dir {
+        case .intoCurrent(let b): return "当前分支会加入 \(b) 的改动。\(ff)如有冲突，可到「储藏」页中止。"
+        case .currentInto(let b): return "会临时切到 \(b) 完成合并，再切回当前分支。\(ff)如遇冲突会停在 \(b) 上等你解决。"
+        }
     }
 
     // MARK: 底部
