@@ -54,6 +54,8 @@ public final class AppState {
     /// 历史/提交页的专属 Diff 查看器（第三栏）：点变更文件后打开
     public var showDiffViewer = false
     public var showAbout = false
+    /// 刷新历史信息弹窗（标题栏「历史」按钮触发）
+    public var showRefreshHistoryPopover = false
     /// 分支选择器弹窗（顶部品牌行的仓库/分支胶囊触发）
     public var showBranchPickerSheet = false
     /// 定位请求：详情面板「在列表中定位」按钮触发，历史列表滚动到该提交并闪烁高亮
@@ -918,6 +920,10 @@ public final class AppState {
     }
 
     // MARK: - 关于与更新
+
+    public func showRefreshHistoryPopoverNow() {
+        showRefreshHistoryPopover = true
+    }
 
     public func openAbout() {
         showAbout = true

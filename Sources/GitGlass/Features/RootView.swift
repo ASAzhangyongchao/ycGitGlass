@@ -15,10 +15,6 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                // 仓库/分支与品牌已上移到系统标题栏（toolbar），
-                // 这里只留操作按钮（拉取/推送/刷新 + 刷新历史 + 更新 + 关于）
-                BrandHeader()
-                    .padding(.bottom, 8)
                 tabBar
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -31,24 +27,7 @@ struct RootView: View {
         .frame(minWidth: 980, minHeight: 640)
         // 系统标题栏：左侧品牌 + 仓库/分支胶囊（点击开分支选择器）
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    state.openAbout()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(nsImage: Brand.headerImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 16, height: 16)
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        Text(Brand.name)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                    }
-                }
-                .buttonStyle(.plain)
-                .help("关于 码牛 MooGit · 版本与检查更新")
-            }
-            ToolbarItem(placement: .navigation) {
+            ToolbarItem(placement: .automatic) {
                 if state.currentRepository != nil {
                     Button {
                         state.showBranchPickerSheet = true
@@ -83,6 +62,38 @@ struct RootView: View {
                     EmptyView()
                 }
             }
+            ToolbarItemGroup(placement: .primaryAction) {
+                if state.isBusy {
+                    BusyBadge(label: state.busyLabel)
+                }
+                ToolbarIconButton(icon: "arrow.down", label: "拉取",
+                                  help: "拉取远程改动（fast-forward）") {
+                    Task { await state.pull() }
+                }
+                .disabled(state.currentRepository == nil || state.isBusy)
+
+                ToolbarIconButton(icon: "arrow.up", label: "推送",
+                                  help: "推送到远程；首次自动建立上游") {
+                    Task { await state.push() }
+                }
+                .disabled(state.currentRepository == nil || state.isBusy)
+
+                ToolbarIconButton(icon: "arrow.clockwise", label: "刷新",
+                                  help: "手动刷新（⌘R）") {
+                    Task { await state.refresh(reason: .manual) }
+                }
+                .disabled(state.isBusy)
+
+                ToolbarIconButton(icon: "clock.arrow.circlepath", label: "历史",
+                                  help: "查看刷新历史") {
+                    state.showRefreshHistoryPopoverNow()
+                }
+
+                ToolbarIconButton(icon: "info.circle", label: "关于",
+                                  help: "关于 码牛 MooGit · 版本 · 检查更新") {
+                    state.openAbout()
+                }
+            }
         }
         .overlay(alignment: .bottom) {
             NoticeBanner().padding(.bottom, 22)
@@ -104,6 +115,18 @@ struct RootView: View {
             set: { if !$0 { state.showAbout = false } }
         )) {
             AboutSheet()
+        }
+        .alert("刷新历史", isPresented: Binding(
+            get: { state.showRefreshHistoryPopover },
+            set: { state.showRefreshHistoryPopover = $0 }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            if let date = state.lastRefreshed {
+                Text("\(date.formatted(.dateTime.month().day().hour().minute())) · \(state.lastRefreshReason)\n空闲零后台任务，数据只在手动刷新、切仓库 / 分支、操作完成后更新")
+            } else {
+                Text("还没有刷新记录。数据只在手动刷新、切仓库 / 分支、操作完成后更新")
+            }
         }
         // 启动只刷新一次；更新检查距上次 ≥24h 才静默做一次，同样不轮询。
         .task {

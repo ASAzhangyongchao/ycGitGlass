@@ -517,3 +517,45 @@ struct TwoFieldSheet: View {
         .onAppear { focused = true }
     }
 }
+
+
+// MARK: - 标题栏图标按钮（悬停浮出文字说明）
+
+struct ToolbarIconButton: View {
+    let icon: String
+    let label: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 26, height: 22)
+                .background(hovering ? Color.primary.opacity(0.10) : Color.primary.opacity(0.04),
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(alignment: .bottom) { hoverLabel }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .onHover { hovering = $0 }
+        .help(help)
+    }
+
+    @ViewBuilder
+    private var hoverLabel: some View {
+        if hovering {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.98),
+                            in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
+                .fixedSize()
+                .offset(y: 28)
+                .zIndex(10)
+        }
+    }
+}
