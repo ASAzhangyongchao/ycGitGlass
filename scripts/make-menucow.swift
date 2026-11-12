@@ -1,22 +1,30 @@
 #!/usr/bin/env swift
 // 生成菜单栏迷你小牛图标（单色模板 + 彩色两套），
 // 模板版用于 MenuBarExtra（自动跟随菜单栏明暗），彩色版备用。
+//
+// 关键教训（2026-11-12 两次 oversized 修复总结）：
+// MenuBarExtra(.menu style) 的 label 渲染不受 SwiftUI .frame 修饰约束，
+// NSImage 运行时改 size 也可能被忽略——只有图片文件本身的像素尺寸可靠。
+// 因此这里直接输出 18x18 像素的成品小图（Retina 下显示约 18pt），
+// 不再依赖任何运行时缩放。
 import AppKit
 import Foundation
 
-let size: CGFloat = 128
+// 逻辑画布 128 用于绘制细节，最终缩到 36 像素输出（2x Retina 的 18pt）
+let drawSize: CGFloat = 128
+let outputPixel: Int = 24
 let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
 
 func drawCow(template: Bool) -> NSImage {
-    let image = NSImage(size: NSSize(width: size, height: size))
+    let image = NSImage(size: NSSize(width: drawSize, height: drawSize))
     image.lockFocus()
     defer { image.unlockFocus() }
+    let size = drawSize
 
     let body = template ? NSColor.black : NSColor(calibratedRed: 0.76, green: 0.58, blue: 0.40, alpha: 1)
     let dark = template ? NSColor.black : NSColor(calibratedRed: 0.55, green: 0.38, blue: 0.24, alpha: 1)
     let muzzle = template ? NSColor.black : NSColor(calibratedRed: 0.92, green: 0.84, blue: 0.74, alpha: 1)
     let horn = template ? NSColor.black : NSColor(calibratedRed: 0.93, green: 0.88, blue: 0.76, alpha: 1)
-    let eyeWhite = template ? NSColor.white : NSColor.white
 
     // 牛角
     let leftHorn = NSBezierPath(ovalIn: NSRect(x: 26, y: 86, width: 16, height: 26))
@@ -78,20 +86,35 @@ func drawCow(template: Bool) -> NSImage {
     return image
 }
 
-func writePNG(_ image: NSImage, to url: URL) throws {
-    guard let tiff = image.tiffRepresentation,
+/// 缩放到指定像素并写 PNG（物理像素，无 DPI 缩放戏法）
+func writeSmallPNG(_ image: NSImage, pixel: Int, to url: URL, template: Bool) throws {
+    let target = CGFloat(pixel)
+    let newSize = NSSize(width: target, height: target)
+    let small = NSImage(size: newSize)
+    small.lockFocus()
+    NSGraphicsContext.current?.imageInterpolation = .high
+    image.draw(in: NSRect(origin: .zero, size: newSize),
+               from: .zero, operation: .copy, fraction: 1)
+    small.unlockFocus()
+    small.isTemplate = template
+    guard let tiff = small.tiffRepresentation,
           let rep = NSBitmapImageRep(data: tiff),
+          rep.pixelsWide == pixel,  // 确认物理像素正确
           let data = rep.representation(using: .png, properties: [:]) else {
+        print("ERROR: 缩放失败，实际像素 \(NSBitmapImageRep(data: small.tiffRepresentation ?? Data())?.pixelsWide ?? -1)")
         exit(1)
     }
     try data.write(to: url)
+    print("  \(url.lastPathComponent): \(rep.pixelsWide)x\(rep.pixelsHigh) px, template=\(template)")
 }
 
+print("生成菜单栏牛图标（24px 成品（1x 屏菜单栏内显示约 22-24pt，macOS 会裁剪到栏内））…")
 let templateCow = drawCow(template: true)
-templateCow.isTemplate = true
-try writePNG(templateCow, to: root.appendingPathComponent("Resources/MenuCowTemplate.png"))
+try writeSmallPNG(templateCow, pixel: outputPixel,
+                  to: root.appendingPathComponent("Resources/MenuCowTemplate.png"), template: true)
 
 let colorCow = drawCow(template: false)
-try writePNG(colorCow, to: root.appendingPathComponent("Resources/MenuCowColor.png"))
+try writeSmallPNG(colorCow, pixel: outputPixel,
+                  to: root.appendingPathComponent("Resources/MenuCowColor.png"), template: false)
 
-print("菜单栏牛图标已生成：MenuCowTemplate.png / MenuCowColor.png")
+print("完成：24px 像素级小图，不依赖任何运行时缩放")

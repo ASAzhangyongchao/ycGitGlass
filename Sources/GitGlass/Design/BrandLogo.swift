@@ -24,15 +24,14 @@ enum Brand {
     }
 
     /// 菜单栏迷你小牛（模板图：自动跟随菜单栏明暗，单色镂空）。
-    /// 注意：源图 128×128，必须把逻辑尺寸压到菜单栏标准（约 18pt），
-    /// 否则 Image(nsImage:) 按原始尺寸渲染会把菜单栏图标撑成巨块。
+    /// 源文件是 36×36 物理像素成品（Retina 下约 18pt）——
+    /// MenuBarExtra(.menu) 的 label 不受 SwiftUI frame 约束、
+    /// 运行时改 NSImage.size 也无效（两次 oversized 修复的教训），
+    /// 只有图片物理像素尺寸可靠。此处不做任何缩放处理。
     static var menuCowImage: NSImage {
         if let url = Bundle.main.url(forResource: "MenuCowTemplate", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             image.isTemplate = true
-            let menuSize = NSSize(width: 18, height: 18)
-            image.size = menuSize
-            for rep in image.representations { rep.size = menuSize }
             return image
         }
         // 兜底：SF Symbol（非 .app 环境运行时）
