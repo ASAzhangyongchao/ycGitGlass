@@ -71,6 +71,13 @@ enum SnapshotMode {
             case "dashboard": return AnyView(DashboardView().environment(state))
             case "commit": return AnyView(CommitView().environment(state))
             case "diff": return AnyView(HistoryView().environment(state))
+            case "root": return AnyView(RootView().environment(state))
+            case "mascotcheck":
+                // 布局实测：量正常态与愤怒态的 MascotCow 实际高度，必须相等
+                return AnyView(VStack(spacing: 30) {
+                    HeightProbe(label: "normal") { MascotCow(isBusy: false) }
+                    HeightProbe(label: "angry") { MascotCow(isBusy: false, initiallyAngry: true) }
+                }.padding(40))
             default: return AnyView(HistoryView().environment(state))
             }
         }()
@@ -89,5 +96,28 @@ enum SnapshotMode {
             print("saved: \(out)")
         }
         exit(0)
+    }
+}
+
+/// 布局探针：渲染 content 并输出实际占用高度（stdout 供脚本断言）。
+private struct HeightProbe<Content: View>: View {
+    let label: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 4) {
+            content()
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { print("HEIGHT[\(label)]=\(geo.size.height)") }
+            }
+            .frame(height: 0)
+        }
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { print("TOTAL[\(label)]=\(geo.size.height)") }
+            }
+        )
     }
 }

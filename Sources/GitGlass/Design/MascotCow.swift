@@ -12,15 +12,29 @@ import GitCore
 /// - Reduce Motion：全部静止，仅保留愤怒气泡文字反馈
 struct MascotCow: View {
     var isBusy: Bool = false
+    /// 快照/自测用：初始即愤怒态（正常交互走点击触发）
+    var initiallyAngry: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var bob = false
     @State private var angry = false
     @State private var sweatToggle = false
     private let bubbleFormat = MascotBubbleFormat()
 
+    /// 气泡槽位固定高度：时间气泡（两行）与愤怒气泡（一行）都居中放在同一高度里，
+    /// 点击切换时整块 MascotCow 的布局高度纹丝不动（体感关键，不许跳）。
+    static let bubbleSlotHeight: CGFloat = 48
+
+    init(isBusy: Bool = false, initiallyAngry: Bool = false) {
+        self.isBusy = isBusy
+        self.initiallyAngry = initiallyAngry
+        _angry = State(initialValue: initiallyAngry)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            // 固定高度槽位：切换愤怒/时间气泡时布局零跳动
             bubble
+                .frame(height: Self.bubbleSlotHeight)
                 .padding(.bottom, 2)
             sticker
         }
@@ -172,12 +186,14 @@ struct MascotCow: View {
 
     @ViewBuilder
     private var bubble: some View {
-        if angry {
-            angryBubble
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
-        } else {
-            timeBubble
-                .transition(.opacity)
+        ZStack {
+            if angry {
+                angryBubble
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            } else {
+                timeBubble
+                    .transition(.opacity)
+            }
         }
     }
 
