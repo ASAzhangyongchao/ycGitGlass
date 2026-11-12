@@ -24,10 +24,15 @@ enum Brand {
     }
 
     /// 菜单栏迷你小牛（模板图：自动跟随菜单栏明暗，单色镂空）。
+    /// 注意：源图 128×128，必须把逻辑尺寸压到菜单栏标准（约 18pt），
+    /// 否则 Image(nsImage:) 按原始尺寸渲染会把菜单栏图标撑成巨块。
     static var menuCowImage: NSImage {
         if let url = Bundle.main.url(forResource: "MenuCowTemplate", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             image.isTemplate = true
+            let menuSize = NSSize(width: 18, height: 18)
+            image.size = menuSize
+            for rep in image.representations { rep.size = menuSize }
             return image
         }
         // 兜底：SF Symbol（非 .app 环境运行时）

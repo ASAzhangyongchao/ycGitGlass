@@ -54,11 +54,16 @@ struct GitGlassApp: App {
         }
 
         // 屏幕顶部菜单栏常驻入口：关掉主窗口也能快速刷新 / 同步。
-        // label 用模板小牛图（自动跟随菜单栏明暗），title 留给无障碍朗读。
+        // label 双保险：模板小牛图（BrandLogo 里已压到 18pt 逻辑尺寸）
+        // + 这里再显式约束 frame，确保与系统菜单栏图标（约 16-18pt）同高，
+        // 不会按 128px 原图把菜单栏撑大。title 留给无障碍朗读。
         MenuBarExtra {
             menuBarContent
         } label: {
             Image(nsImage: Brand.menuCowImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 18, height: 18)
         }
         .menuBarExtraStyle(.menu)
     }
