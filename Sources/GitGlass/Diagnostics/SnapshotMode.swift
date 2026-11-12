@@ -72,6 +72,23 @@ enum SnapshotMode {
             case "commit": return AnyView(CommitView().environment(state))
             case "diff": return AnyView(HistoryView().environment(state))
             case "root": return AnyView(RootView().environment(state))
+            case "commitdiff":
+                // 复现提交页沉浸式 diff：模拟 loadDiff 完成后的状态
+                state.diffFilePath = "Sources/App.swift"
+                state.diffText = """
+                diff --git a/Sources/App.swift b/Sources/App.swift
+                index 83db48f..777d10e 100644
+                --- a/Sources/App.swift
+                +++ b/Sources/App.swift
+                @@ -1,3 +1,4 @@
+                 line1
+                -line2
+                +line2 CHANGED
+                 line3
+                +line4 NEW
+                """
+                print("SNAP diffFilePath=[\(state.diffFilePath)] diffText.len=\(state.diffText.count)")
+                return AnyView(CommitView().environment(state))
             case "mascotcheck":
                 // 布局实测：量正常态与愤怒态的 MascotCow 实际高度，必须相等
                 return AnyView(VStack(spacing: 30) {
@@ -121,3 +138,5 @@ private struct HeightProbe<Content: View>: View {
         )
     }
 }
+
+

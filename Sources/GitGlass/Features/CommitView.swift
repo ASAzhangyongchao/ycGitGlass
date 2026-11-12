@@ -27,12 +27,16 @@ struct CommitView: View {
                     }
                     .onTapGesture { commitEditorFocused = false }
                 } else {
-                    // 沉浸模式：点击文件后全宽大画面查看变更，返回回列表
+                    // 沉浸模式：点击文件后全宽大画面查看变更，返回回列表。
+                    // layoutPriority(1)：diff 面板优先占高度，绝不被底部
+                    // 提交栏（TextEditor 撑高时）挤压成 0 高空白。
                     immersiveDiff
+                        .layoutPriority(1)
                     Spacer(minLength: 0)
                 }
                 // 提交说明卡钉在底部：文件区先滚动，写说明和提交按钮常驻可见
                 composer
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
                     .padding(.bottom, 6)
             }

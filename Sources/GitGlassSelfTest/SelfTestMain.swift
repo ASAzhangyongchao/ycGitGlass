@@ -3,6 +3,7 @@ import AppKit
 import GitCore
 
 /// 深度自检：在真实临时 Git 仓库 + 临时 SSH 目录上跑通全部服务层能力，不依赖 GUI、不触碰用户真实 ~/.ssh。
+@MainActor
 @main
 struct GitGlassSelfTest {
     static func main() async {
