@@ -16,17 +16,21 @@ struct CommitView: View {
             EmptyStateView(title: "还没有仓库", message: "先在左侧添加一个 Git 仓库。", icon: "folder")
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        HStack(alignment: .top, spacing: 18) {
+                if state.diffFilePath.isEmpty {
+                    // 普通模式：文件列表独占（原右侧 diff 栏取消，列表全宽）
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
                             fileList
-                            diffPanel
                         }
+                        .padding(.vertical, 6)
+                        .padding(.bottom, 4)
                     }
-                    .padding(.vertical, 6)
-                    .padding(.bottom, 4)
+                    .onTapGesture { commitEditorFocused = false }
+                } else {
+                    // 沉浸模式：点击文件后全宽大画面查看变更，返回回列表
+                    immersiveDiff
+                    Spacer(minLength: 0)
                 }
-                .onTapGesture { commitEditorFocused = false }
                 // 提交说明卡钉在底部：文件区先滚动，写说明和提交按钮常驻可见
                 composer
                     .padding(.top, 2)
@@ -361,38 +365,47 @@ struct CommitView: View {
 
     // MARK: 差异预览
 
-    private var diffPanel: some View {
-        GlassCard(title: "差异预览", icon: "text.alignleft",
-                  help: "点击左侧文件查看逐行改动；图片文件自动切换并排 / 滑块 / 差异分析对比。") {
-            if let imageDiff = state.imageDiff, let imagePath = state.imageDiffPath, imagePath == state.diffFilePath {
-                // 图片变更：并排 / 滑块叠加 / 差异高亮
-                ImageDiffView(pair: imageDiff, filePath: imagePath)
-            } else if state.isLoadingImageDiff {
-                VStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("正在读取图片…")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
+    /// 全宽沉浸式 diff 视图：文件名 + 返回 + 内容铺满
+    private var immersiveDiff: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 10) {
+                Button {
+                    state.diffFilePath = ""
+                    state.diffText = ""
+                    state.imageDiff = nil
+                    state.imageDiffPath = nil
+                } label: {
+                    Label("返回列表", systemImage: "chevron.left")
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.primary.opacity(0.06),
+                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
-                .frame(maxWidth: .infinity, minHeight: 180)
-            } else if state.diffText.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 26, weight: .light))
-                        .foregroundStyle(.tertiary)
-                    Text("选中一个文件后，这里显示逐行改动")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                    Text("图片文件支持并排与叠加对比")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 180)
-            } else {
-                DiffTextView(text: state.diffText)
-                    .frame(minHeight: 260, maxHeight: .infinity)
+                .buttonStyle(.plain)
+                .help("回到文件列表（⎋）")
+
+                Text((state.diffFilePath as NSString).lastPathComponent)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Text(state.diffFilePath)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 4)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+
+            DiffViewerPanel()
+                .frame(maxHeight: .infinity)
         }
-        .frame(minWidth: 340, maxWidth: .infinity)
     }
+
+
 }

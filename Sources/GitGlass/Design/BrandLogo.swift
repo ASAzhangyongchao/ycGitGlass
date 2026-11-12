@@ -41,6 +41,7 @@ enum Brand {
 struct BrandHeader: View {
     @Environment(AppState.self) private var state
     @State private var showRefreshHistory = false
+    @State private var isHovering = false
 
     /// 操作行：品牌与仓库/分支已上移系统标题栏，这里只留高频操作。
     /// 图标+文字标签（可读优先），悬停浮起提示可点。
@@ -108,20 +109,50 @@ struct BrandHeader: View {
         .glassSurface(cornerRadius: 13, tint: GlassPalette.blue.opacity(0.07))
     }
 
-    /// 图标+文字标签按钮：悬停浮起 + 底色反馈（一眼看懂是什么功能）
+    /// 紧凑图标按钮（悬停浮出文字说明）
     private func labeledIconButton(icon: String, label: String, help: String,
                                     action: @escaping () -> Void) -> some View {
+        HoverHintButton(icon: icon, hint: label, help: help, action: action)
+    }
+}
+
+/// 紧凑图标按钮：默认只显示图标；悬停时按钮下方浮出文字标签。
+private struct HoverHintButton: View {
+    let icon: String
+    let hint: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
         Button(action: action) {
-            Label(label, systemImage: icon)
-                .font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color.primary.opacity(0.05),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Image(systemName: icon)
+                .font(.system(size: 10.5, weight: .medium))
+                .frame(width: 24, height: 20)
+                .background(hovering ? Color.primary.opacity(0.10) : Color.primary.opacity(0.05),
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(alignment: .bottom) { hoverLabel }
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+        .onHover { hovering = $0 }
         .help(help)
+    }
+
+    @ViewBuilder
+    private var hoverLabel: some View {
+        if hovering {
+            Text(hint)
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.98),
+                            in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
+                .fixedSize()
+                .offset(y: 26)
+                .zIndex(10)
+        }
     }
 }
 
