@@ -31,13 +31,25 @@ enum SnapshotMode {
         state.status = status2
         var commits: [Commit] = []
         for index in 0..<30 {
+            // 模拟宽轨道（多分支并行）：偶数行多几条竖线，验证折叠策略
+            let graph: String
+            if page == "widegraph" {
+                // 20 字符 ≈ 10 条并行分支 → 必须触发自动折叠
+                graph = "* | | | | | | | | | |"
+            } else {
+                switch index % 3 {
+                case 0: graph = "* | | |\\"
+                case 1: graph = "* | | | |"
+                default: graph = "* | | |/ "
+                }
+            }
             commits.append(Commit(
                 hash: "hash\(index)", shortHash: "s\(index)abc",
                 author: "张三", email: "z@x.c",
                 date: "2026-11-11T09:\(String(format: "%02d", index % 60)):00+08:00",
                 subject: "提交主题 \(index) 修复某某问题",
                 body: "", refs: index == 0 ? "HEAD -> main" : "",
-                graph: "* |"
+                graph: graph
             ))
         }
         state.commits = commits

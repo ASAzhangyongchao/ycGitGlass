@@ -8,6 +8,7 @@ struct CommitDetailPanel: View {
     @State private var showCherryPickConfirm = false
     @State private var showRevertConfirm = false
     @State private var showTagSheet = false
+    @State private var showGraphPopover = false
     @State private var tagName = ""
 
     var body: some View {
@@ -18,6 +19,7 @@ struct CommitDetailPanel: View {
                     metadata(detail)
                     statistics(detail)
                     actions
+                    graphSection
                     if !detail.body.isEmpty {
                         bodySection(detail.body)
                     }
@@ -208,6 +210,57 @@ struct CommitDetailPanel: View {
         .foregroundStyle(tint ?? .primary)
     }
 
+    // MARK: 分支图弹层（轨道列折叠后的对应关系出口）
+
+    /// 该提交在提交序列中的位置（用于截取局部上下文）
+    private var graphContext: [Commit] {
+        guard let hash = state.selectedCommit?.hash else { return [] }
+        let all = state.commits
+        guard let index = all.firstIndex(where: { $0.hash == hash }) else { return [] }
+        let lower = max(0, index - 8)
+        let upper = min(all.count, index + 9)
+        return Array(all[lower..<upper])
+    }
+
+    private var graphSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("分支关系")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                SmallIconButton(icon: "point.3.connected.trianglepath.dotted",
+                                helpText: "在弹层中查看这条提交前后的分支轨道") {
+                    showGraphPopover = true
+                }
+            }
+            if state.selectedCommit?.graph.contains("*") == true
+                || state.selectedCommit?.graph.contains("|") == true {
+                // 迷你静态示意：单行轨道字符（等宽渲染）
+                let graphText = state.selectedCommit?.graph.trimmingCharacters(in: .whitespaces) ?? ""
+                HStack(spacing: 4) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 6))
+                        .foregroundStyle(GlassPalette.accent)
+                    Text(graphText)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .lineLimit(1)
+                .padding(.vertical, 2)
+            }
+            if graphContext.isEmpty {
+                Text("列表里找不到这条提交（可能在全部分支视图之外）")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .popover(isPresented: $showGraphPopover, arrowEdge: .leading) {
+            CommitGraphPopover(commits: graphContext,
+                               highlightHash: state.selectedCommit?.hash)
+        }
+    }
+
     private func bodySection(_ body: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("提交说明正文").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
@@ -265,3 +318,76 @@ struct CommitDetailPanel: View {
         return String(raw[..<end]).replacingOccurrences(of: "T", with: " ")
     }
 }
+
+/// 分支图弹层：展示目标提交前后的局部轨道（±8 条），
+/// 轨道列被折叠（并行分支过多）时，这里是分支对应关系的主要出口。
+struct CommitGraphPopover: View {
+    let commits: [Commit]
+    var highlightHash: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(GlassPalette.accent)
+                Text("分支轨道 · 上下文")
+                    .font(.system(size: 11, weight: .semibold))
+                Spacer()
+                Text("高亮 = 当前提交")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            if commits.isEmpty {
+                Text("没有可展示的轨道上下文")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(16)
+            } else {
+                ScrollView {
+                    HStack(alignment: .top, spacing: 0) {
+                        CommitGraphColumn(commits: commits,
+                                          rowHeight: 44,
+                                          laneStep: 11,
+                                          maxCharacters: 30,
+                                          highlightHash: highlightHash)
+                            .padding(.top, 2)
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(commits) { commit in
+                                HStack(spacing: 6) {
+                                    Text(commit.shortHash)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundStyle(commit.hash == highlightHash
+                                                         ? GlassPalette.accent : .secondary)
+                                    Text(commit.subject)
+                                        .font(.system(size: 11,
+                                                      weight: commit.hash == highlightHash ? .semibold : .regular))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                                .frame(minHeight: 44, alignment: .leading)
+                                .padding(.horizontal, 4)
+                                .background(commit.hash == highlightHash
+                                            ? GlassPalette.accent.opacity(0.10)
+                                            : Color.clear)
+                                .cornerRadius(7)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
+                }
+                .frame(minWidth: 460, minHeight: 240)
+                .frame(maxHeight: 380)
+            }
+        }
+        .frame(width: 520, alignment: .leading)
+        .padding(.bottom, 8)
+    }
+}
+

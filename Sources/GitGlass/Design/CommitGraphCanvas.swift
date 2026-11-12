@@ -4,15 +4,24 @@ import GitCore
 /// 整列连续渲染的提交轨道图（GitKraken / Fork 风格）。
 /// 关键：所有行的 graph 拼成一张大 Canvas 一次绘制，行高统一，
 /// 竖线/斜线跨行连续不断——而不是此前每行各画一小段造成的“断裂小树”。
+///
+/// 防御性截断：极端仓库（十几条分支并行）时 git 的 graph 字符串会很宽，
+/// maxCharacters 封顶渲染宽度，保证轨道列永远不会把提交信息挤没。
+/// 配套策略：并行过多时 HistoryView 直接折叠整个轨道列（见 showsGraph），
+/// 对应关系改由提交详情里的「分支图」弹层展示。
 struct CommitGraphColumn: View {
     let commits: [Commit]
     var rowHeight: CGFloat = 52
     var laneStep: CGFloat = 11
+    /// 最多渲染的轨道字符数（约 = 2×并行分支数），超出部分截断不画
+    var maxCharacters = 16
+    /// 详情弹层中要高亮的提交（画大光环）；nil 时高亮第一行（HEAD）
+    var highlightHash: String?
 
     @Environment(\.colorScheme) private var scheme
 
     private var maxColumns: Int {
-        commits.map(\.graph.count).max() ?? 1
+        min(maxCharacters, commits.map(\.graph.count).max() ?? 1)
     }
 
     var width: CGFloat {
@@ -26,7 +35,7 @@ struct CommitGraphColumn: View {
 
             for (row, commit) in commits.enumerated() {
                 let centerY = CGFloat(row) * rowHeight + rowHeight / 2
-                let characters = Array(commit.graph)
+                let characters = Array(commit.graph.prefix(maxColumns))
 
                 // 第一遍：连线（画满整行高度，跨行连续）
                 for (index, character) in characters.enumerated() {
@@ -64,8 +73,8 @@ struct CommitGraphColumn: View {
                     let lane = index / 2
                     let color = laneColor(lane)
 
-                    // HEAD / 分支头：外圈光环 + 实心大点
-                    let isHead = row == 0
+                    // HEAD（第一行，无显式高亮时）或弹层目标行：外圈光环 + 实心大点
+                    let isHead = highlightHash == nil ? row == 0 : commit.hash == highlightHash
                     let dotRadius: CGFloat = isHead ? 5.6 : 4.6
 
                     if isHead {

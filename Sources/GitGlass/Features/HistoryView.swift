@@ -11,6 +11,27 @@ struct HistoryView: View {
     @State private var flashOn = false
     /// 内容区可用宽度（隐形探测器测量，驱动三栏/两栏策略）
     @State private var viewportWidth: CGFloat = 1400
+    /// 用户手动切换轨道列显示（nil = 跟随自动策略）
+    @State private var graphOverride: Bool?
+
+    /// 轨道列显示策略：
+    /// 并行分支 ≤ graphLaneLimit 条时正常画轨道；超过则自动折叠，
+    /// 把宽度全部让给提交信息——轨道过宽把提交信息挤没是硬伤。
+    /// 对应关系不丢：提交详情里有「分支图」按钮，弹层展示局部轨道上下文。
+    private var graphLaneLimit: Int { 7 }
+
+    private var maxGraphWidth: Int {
+        state.commits.map(\.graph.count).max() ?? 0
+    }
+
+    /// 自动策略：轨道够窄才显示
+    private var autoGraph: Bool {
+        maxGraphWidth <= graphLaneLimit * 2 + 2
+    }
+
+    private var showsGraph: Bool {
+        graphOverride ?? autoGraph
+    }
 
     var body: some View {
         if state.currentRepository == nil {
@@ -126,6 +147,18 @@ struct HistoryView: View {
                         get: { state.historyAllBranches },
                         set: { state.historyAllBranches = $0 }
                     ))
+                    Divider()
+                    Toggle("显示分支轨道", isOn: Binding(
+                        get: { showsGraph },
+                        set: { graphOverride = $0 }
+                    ))
+                    if maxGraphWidth > graphLaneLimit * 2 + 2 {
+                        Text("当前仓库并行分支较多，轨道列已自动收起；对应关系可看提交详情 →「分支关系」。")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: 180, alignment: .leading)
+                            .padding(.vertical, 2)
+                    }
                 } label: {
                     Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
                         .font(.system(size: 11, weight: .medium))
@@ -146,6 +179,30 @@ struct HistoryView: View {
                 .onChange(of: state.historyAllBranches) { _, _ in
                     Task { await state.refresh(reason: .manual) }
                 }
+
+                // 轨道列开关：点击在 开→关→自动 三态循环；
+                // 并行分支过多时自动收起，这里可强制重新展开
+                Button {
+                    withComfortableAnimation(reduceMotion) {
+                        if graphOverride == nil {
+                            graphOverride = showsGraph ? false : true
+                        } else if graphOverride! != autoGraph {
+                            // 已是手动状态 → 恢复自动
+                            graphOverride = nil
+                        } else {
+                            graphOverride = !showsGraph
+                        }
+                    }
+                } label: {
+                    Image(systemName: showsGraph ? "point.3.filled.connected.trianglepath.dotted"
+                                                 : "point.3.connected.trianglepath.dotted")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(showsGraph ? GlassPalette.accent : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(graphOverride == nil
+                      ? "分支轨道：自动模式（点击切换显示/隐藏）"
+                      : "分支轨道：手动模式（点击恢复自动）")
             }
 
             Spacer(minLength: 8)
@@ -275,10 +332,15 @@ struct HistoryView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     HStack(alignment: .top, spacing: 0) {
-                        // 连续轨道背景层：一张 Canvas 画整列，线条跨行贯通
-                        CommitGraphColumn(commits: state.filteredCommits,
-                                          rowHeight: Self.rowHeight)
-                            .padding(.top, 4)
+                        // 连续轨道背景层：一张 Canvas 画整列，线条跨行贯通。
+                        // 并行分支过多时自动隐藏（用户可从筛选菜单强制开关），
+                        // 对应关系改看提交详情里的「分支图」弹层。
+                        if showsGraph {
+                            CommitGraphColumn(commits: state.filteredCommits,
+                                              rowHeight: Self.rowHeight)
+                                .padding(.top, 4)
+                                .transition(.opacity)
+                        }
                         // 行内容层：固定行高与轨道对齐
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(state.filteredCommits) { commit in
