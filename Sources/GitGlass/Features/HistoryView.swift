@@ -48,19 +48,14 @@ struct HistoryView: View {
                             // 窄窗口：Diff 覆盖在详情上（带关闭按钮），列表保持可读宽度
                             if state.showDiffViewer && !wide {
                                 DiffViewerPanel()
-                                    .transition(.opacity.combined(with: .move(edge: .trailing)))
                             }
                         }
-                        .animation(reduceMotion ? nil : Motion.snappy, value: state.showDiffViewer)
 
                         // 宽窗口：第三栏并排
                         if state.showDiffViewer && wide {
                             DiffViewerPanel()
-                                .transition(.opacity.combined(with: .move(edge: .trailing)))
                         }
                     }
-                    .animation(reduceMotion ? nil : Motion.snappy, value: state.showDetailPanel)
-                    .animation(reduceMotion ? nil : Motion.snappy, value: state.showDiffViewer)
                 }
             }
             .padding(.vertical, 6)
@@ -278,10 +273,9 @@ struct HistoryView: View {
                             .padding(.top, 4)
                         // 行内容层：固定行高与轨道对齐
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(state.filteredCommits.enumerated()), id: \.element.id) { index, commit in
+                            ForEach(state.filteredCommits) { commit in
                                 commitRow(commit)
                                     .id(commit.hash)
-                                    .staggered(index)
                             }
                         }
                         .padding(.vertical, 4)
@@ -289,9 +283,7 @@ struct HistoryView: View {
                 }
                 .onChange(of: state.locateRequest) { _, request in
                     guard let request else { return }
-                    withAnimation(reduceMotion ? nil : Motion.snappy) {
-                        proxy.scrollTo(request.hash, anchor: .center)
-                    }
+                    proxy.scrollTo(request.hash, anchor: .center)
                     flashHash = request.hash
                     flashOn = true
                     // 闪烁两轮后熄灭（事件驱动，无 Timer）
@@ -356,10 +348,8 @@ struct HistoryView: View {
                                           lineWidth: 1.5)
                     )
             }
-            .animation(reduceMotion ? nil : Motion.snappy, value: flashOn)
         }
         .buttonStyle(.plain)
-        .animation(Motion.snappy, value: selected)
         .help("打开提交详情：元信息、变更文件、遴选 / 还原 / 打标签")
     }
 
