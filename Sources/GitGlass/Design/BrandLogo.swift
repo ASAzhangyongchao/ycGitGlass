@@ -40,6 +40,7 @@ enum Brand {
 /// 上一版品牌条与顶栏重复显示「仓库名 + 分支」且把内容区压矮，这里收成单行。
 struct BrandHeader: View {
     @Environment(AppState.self) private var state
+    @State private var showRefreshHistory = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -102,12 +103,37 @@ struct BrandHeader: View {
 
             updateBadge
 
+            SmallIconButton(icon: "clock.arrow.circlepath", helpText: "刷新历史") {
+                showRefreshHistory.toggle()
+            }
+            .popover(isPresented: $showRefreshHistory, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let date = state.lastRefreshed {
+                        Text("上次刷新")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                        Text("\(date.formatted(.dateTime.month().day().hour().minute())) · \(state.lastRefreshReason)")
+                            .font(.system(size: 11.5, design: .monospaced))
+                    } else {
+                        Text("还没有刷新记录")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    Divider().opacity(0.5)
+                    Text("空闲零后台任务 · 数据只在手动刷新、切仓库 / 分支、操作完成后更新")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(12)
+                .frame(width: 250, alignment: .leading)
+            }
+
             SmallIconButton(icon: "info.circle", helpText: "关于 码牛 MooGit · 版本 · GitHub") {
                 state.openAbout()
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .glassSurface(cornerRadius: 13, tint: GlassPalette.blue.opacity(0.07))
     }
 

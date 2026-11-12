@@ -16,26 +16,43 @@ struct HistoryView: View {
         } else {
             VStack(alignment: .leading, spacing: 15) {
                 searchBar
-                HStack(alignment: .top, spacing: 14) {
-                    GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
-                              subtitle: "共 \(state.filteredCommits.count) 条 · 点任意一条在右侧看详情",
-                              padding: 14) {
-                        historyList
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 宽度感知三栏策略：
+                // >= 1240pt 三栏并排；更窄时 Diff 阅读区以覆盖层显示在详情面板之上，
+                // 避免每栏被挤到 ~300px 无法阅读。
+                GeometryReader { geo in
+                    let wide = geo.size.width >= 1240
+                    HStack(alignment: .top, spacing: 14) {
+                        GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
+                                  help: "彩色轨道 = 分支 / 合并关系；点提交看详情，详情里可定位 / 遴选 / 还原 / 打标签。",
+                                  padding: 14) {
+                            historyList
+                        }
+                        .frame(minWidth: wide ? 360 : 300,
+                               idealWidth: 480,
+                               maxWidth: .infinity, maxHeight: .infinity)
 
-                    if state.showDetailPanel {
-                        CommitDetailPanel()
-                            .frame(maxHeight: .infinity)
-                    }
+                        ZStack(alignment: .topTrailing) {
+                            if state.showDetailPanel {
+                                CommitDetailPanel()
+                                    .frame(maxHeight: .infinity)
+                            }
+                            // 窄窗口：Diff 覆盖在详情上（带关闭按钮），列表保持可读宽度
+                            if state.showDiffViewer && !wide {
+                                DiffViewerPanel()
+                                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+                            }
+                        }
+                        .animation(reduceMotion ? nil : Motion.snappy, value: state.showDiffViewer)
 
-                    // 第三栏：专属 Diff 阅读区（点变更文件后滑入，与列表同高）
-                    if state.showDiffViewer {
-                        DiffViewerPanel()
+                        // 宽窗口：第三栏并排
+                        if state.showDiffViewer && wide {
+                            DiffViewerPanel()
+                                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        }
                     }
+                    .animation(reduceMotion ? nil : Motion.snappy, value: state.showDetailPanel)
+                    .animation(reduceMotion ? nil : Motion.snappy, value: state.showDiffViewer)
                 }
-                .animation(reduceMotion ? nil : Motion.snappy, value: state.showDetailPanel)
-                .animation(reduceMotion ? nil : Motion.snappy, value: state.showDiffViewer)
             }
             .padding(.vertical, 6)
             .padding(.bottom, 20)

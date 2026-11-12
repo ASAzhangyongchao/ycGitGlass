@@ -83,7 +83,8 @@ struct DashboardView: View {
     }
 
     private var quickActions: some View {
-        GlassCard(title: "今天要做的事", icon: "bolt.fill", subtitle: "按推荐顺序，一步一个动作") {
+        GlassCard(title: "今天要做的事", icon: "bolt.fill",
+                  help: "按推荐顺序，一步一个动作：先拉取远程，再暂存改动，最后一键提交并推送。") {
             VStack(alignment: .leading, spacing: 11) {
                 actionRow(number: "1", title: "拉取远程改动", caption: "先同步，避免推送被拒绝", icon: "arrow.down") {
                     Task { await state.pull() }
@@ -126,7 +127,8 @@ struct DashboardView: View {
     }
 
     private var recentCommits: some View {
-        GlassCard(title: "最近提交", icon: "clock", subtitle: "点任意一条查看变更文件") {
+        GlassCard(title: "最近提交", icon: "clock",
+                  help: "点任意一条跳到历史页并展开该提交的详情与变更文件。") {
             if state.commits.isEmpty {
                 Text("这个仓库还没有提交记录")
                     .font(.system(size: 12))

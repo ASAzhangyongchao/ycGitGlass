@@ -16,16 +16,15 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                BrandHeader()
-                    .padding(.bottom, 8)
-                actionBar
+                // 顶部一行：品牌 + 仓库/分支 + 操作（合并原 actionBar，省一整行）
+                HStack(spacing: 10) {
+                    BrandHeader()
+                    actionBarInline
+                }
+                .padding(.bottom, 8)
                 tabBar
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // 底部状态条：从页签上方移到窗口最底（内容区下方），给中部内容让位
-                refreshFooter
-                    .padding(.top, 6)
-                    .padding(.bottom, 2)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 14)
@@ -66,54 +65,34 @@ struct RootView: View {
 
     // MARK: 操作行（仓库/分支信息已并入品牌行，这里只留动作，不再重复两遍）
 
-    private var actionBar: some View {
-        HStack(spacing: 10) {
+    /// 顶部操作区（并入品牌行）：分支选择器 + 拉取/推送/刷新紧凑图标
+    private var actionBarInline: some View {
+        HStack(spacing: 8) {
             if state.isBusy {
                 BusyBadge(label: state.busyLabel)
             }
 
-            Spacer(minLength: 8)
-
             branchMenu
                 .disabled(state.currentRepository == nil || state.isBusy)
 
-            ActionButton(title: "拉取", icon: "arrow.down") {
+            SmallIconButton(icon: "arrow.down", helpText: "拉取（fast-forward，避免多余合并提交）") {
                 Task { await state.pull() }
             }
             .disabled(state.currentRepository == nil || state.isBusy)
-            .help("用 fast-forward 拉取远程改动，避免多余合并提交")
 
-            ActionButton(title: "推送", icon: "arrow.up", prominent: true) {
+            SmallIconButton(icon: "arrow.up", helpText: "推送到远程；首次推送自动建立上游") {
                 Task { await state.push() }
             }
             .disabled(state.currentRepository == nil || state.isBusy)
 
-            ActionButton(title: "刷新", icon: "arrow.clockwise") {
+            SmallIconButton(icon: "arrow.clockwise", helpText: "手动刷新（⌘R）：状态、分支、历史、远程源与密钥") {
                 Task { await state.refresh(reason: .manual) }
             }
             .disabled(state.isBusy)
-            .help("手动重新读取状态、分支、历史、远程源与密钥（⌘R）")
         }
-        .padding(.top, 10)
-        .padding(.bottom, 10)
     }
 
-    private var refreshFooter: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "bolt.horizontal.fill").font(.system(size: 9))
-            if let date = state.lastRefreshed {
-                Text("上次刷新 \(date.formatted(.dateTime.hour().minute())) · \(state.lastRefreshReason)")
-            } else {
-                Text("数据不会自动轮询，仅在你点刷新、切仓库、切分支或完成操作时更新")
-            }
-            Spacer()
-            Text("空闲零后台任务")
-                .foregroundStyle(.tertiary)
-        }
-        .font(.system(size: 10.5))
-        .foregroundStyle(.secondary)
-        .padding(.leading, 2)
-    }
+
 
     private var branchMenu: some View {
         Button {

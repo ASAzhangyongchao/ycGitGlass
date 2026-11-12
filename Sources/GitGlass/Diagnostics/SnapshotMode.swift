@@ -43,6 +43,8 @@ enum SnapshotMode {
         state.commits = commits
         state.selectedCommit = commits[0]
         state.showDetailPanel = true
+        if page == "diff" { state.showDiffViewer = true }
+        if page == "history" { state.showDetailPanel = true }
         state.commitDetail = CommitDetail(
             hash: "hash0", authorName: "张三", authorEmail: "z@x.c",
             authorDate: "2026-11-11 09:00",
@@ -56,6 +58,7 @@ enum SnapshotMode {
             switch page {
             case "dashboard": return AnyView(DashboardView().environment(state))
             case "commit": return AnyView(CommitView().environment(state))
+            case "diff": return AnyView(HistoryView().environment(state))
             default: return AnyView(HistoryView().environment(state))
             }
         }()

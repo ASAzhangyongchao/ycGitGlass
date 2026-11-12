@@ -28,23 +28,7 @@ struct CommitView: View {
                 // 提交说明卡钉在底部：文件区先滚动，写说明和提交按钮常驻可见
                 composer
                     .padding(.top, 2)
-                // 底部固定刷新信息条（不再随内容滚动，也给底部留出呼吸空间）
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt.horizontal.fill").font(.system(size: 9))
-                    if let date = state.lastRefreshed {
-                        Text("上次刷新 \(date.formatted(.dateTime.hour().minute())) · \(state.lastRefreshReason)")
-                    } else {
-                        Text("点顶栏「刷新」读取最新状态")
-                    }
-                    Spacer()
-                    Text("暂存/丢弃：悬停文件行右侧按钮")
-                        .foregroundStyle(.tertiary)
-                }
-                .font(.system(size: 10.5))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
-                .padding(.bottom, 14)
+                    .padding(.bottom, 6)
             }
             .alert("确定丢弃所选文件的改动？", isPresented: $showDiscardConfirm) {
                 Button("取消", role: .cancel) {}
@@ -62,109 +46,116 @@ struct CommitView: View {
     /// 输入框默认单行高（36），聚焦后撑到多行（110），失焦回落。
     @FocusState private var commitEditorFocused: Bool
 
-    /// 底部提交栏：两行清晰布局——上行 = 文字标签暂存操作 + 前缀下拉；
-    /// 下行 = 输入框（默认矮，聚焦撑高）+ 主按钮「提交并推送」「提交」。
-    /// 按钮全部带文字（纯图标看不懂是上一版被骂的原因），高度克制不占地方。
+    /// 底部提交栏 v4（极简一行）：
+    /// [前缀][⋯次要操作] [输入框——————] [提交并推送] [提交]
+    /// 次要操作全部收进菜单，主操作只留两个小按钮；中间内容最大化。
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 上行：次要操作（小号文字按钮）
-            HStack(spacing: 8) {
-                Text("暂存")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-
-                secondaryButton("所选(\(state.selectedFilePaths.count))", icon: "plus.circle") {
-                    Task { await state.stageSelected() }
+        HStack(alignment: .center, spacing: 8) {
+            // 左：前缀下拉
+            Menu {
+                ForEach(Self.prefixes, id: \.self) { prefix in
+                    Button(prefix) { state.appendCommitPrefix(prefix) }
                 }
-                .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
-
-                secondaryButton("全部", icon: "checkmark.circle") {
-                    Task { await state.stageAll() }
-                }
-                .disabled(state.status.isClean || state.isBusy)
-
-                secondaryButton("取消暂存", icon: "minus.circle") {
-                    Task { await state.unstageSelected() }
-                }
-                .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
-
-                Divider().frame(height: 10).opacity(0.6)
-
-                secondaryButton("储藏", icon: "archivebox") {
-                    Task { await state.stashPush() }
-                }
-                .disabled(state.isBusy || state.status.isClean)
-                .help("储藏当前改动，切分支或遴选前很方便")
-
-                Spacer(minLength: 0)
-
-                Menu {
-                    ForEach(Self.prefixes, id: \.self) { prefix in
-                        Button(prefix) { state.appendCommitPrefix(prefix) }
-                    }
-                } label: {
-                    Label("前缀", systemImage: "text.prepend")
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("插入快捷前缀：feat / fix / docs …")
+            } label: {
+                Image(systemName: "text.prepend")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .frame(width: 26, height: 26)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("插入快捷前缀：feat / fix / docs …")
 
-            // 下行：输入框 + 主按钮
-            HStack(alignment: .center, spacing: 10) {
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: Binding(
-                        get: { state.commitMessage },
-                        set: { state.commitMessage = $0 }
-                    ))
-                    .font(.system(size: 12.5))
-                    .focused($commitEditorFocused)
-                    .frame(height: commitEditorFocused ? 88 : 34)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(commitEditorFocused
-                                    ? GlassPalette.accent.opacity(0.45)
-                                    : Color.primary.opacity(0.08),
-                                    lineWidth: commitEditorFocused ? 1.5 : 1)
-                    )
-                    .animation(reduceMotion ? nil : Motion.snappy, value: commitEditorFocused)
-
-                    if state.commitMessage.isEmpty && !commitEditorFocused {
-                        Text("一句提交说明，点此展开…")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 10)
-                            .allowsHitTesting(false)
+            // 左：次要操作（暂存/储藏）收进一个菜单
+            Menu {
+                Section("暂存") {
+                    Button("暂存所选 (\(state.selectedFilePaths.count))") {
+                        Task { await state.stageSelected() }
                     }
+                    .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
+                    Button("暂存全部") { Task { await state.stageAll() } }
+                        .disabled(state.status.isClean || state.isBusy)
+                    Button("取消暂存所选") { Task { await state.unstageSelected() } }
+                        .disabled(state.selectedFilePaths.isEmpty || state.isBusy)
                 }
-                .frame(maxWidth: .infinity)
-
-                VStack(alignment: .trailing, spacing: 5) {
-                    ActionButton(title: "提交并推送", icon: "paperplane.fill",
-                                 tint: GlassPalette.mint, prominent: true, disabled: !canCommit) {
-                        Task { await state.commit(andPush: true) }
-                    }
-                    .help("提交后自动推送；首次推送会建立上游关联")
-
-                    ActionButton(title: "仅提交", icon: "arrow.up.doc",
-                                 disabled: !canCommit) {
-                        Task { await state.commit() }
-                    }
-                    .help("只提交不推送")
+                Section("其它") {
+                    Button("储藏当前改动") { Task { await state.stashPush() } }
+                        .disabled(state.isBusy || state.status.isClean)
                 }
-                .fixedSize()
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 26, height: 26)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("暂存所选 / 全部 / 取消暂存、储藏")
+
+            // 中：输入框（默认矮，聚焦撑高）
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: Binding(
+                    get: { state.commitMessage },
+                    set: { state.commitMessage = $0 }
+                ))
+                .font(.system(size: 12.5))
+                .focused($commitEditorFocused)
+                .frame(height: commitEditorFocused ? 88 : 30)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .scrollContentBackground(.hidden)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(commitEditorFocused
+                                ? GlassPalette.accent.opacity(0.45)
+                                : Color.primary.opacity(0.08),
+                                lineWidth: commitEditorFocused ? 1.5 : 1)
+                )
+                .animation(reduceMotion ? nil : Motion.snappy, value: commitEditorFocused)
+
+                if state.commitMessage.isEmpty && !commitEditorFocused {
+                    Text("一句提交说明…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            // 右：两个主按钮（小号，带文字）
+            Button {
+                Task { await state.commit(andPush: true) }
+            } label: {
+                Label("提交并推送", systemImage: "paperplane.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(GlassPalette.mint)
+            .disabled(!canCommit)
+            .help("提交后自动推送；首次推送会建立上游关联（⌘⏎）")
+
+            Button {
+                Task { await state.commit() }
+            } label: {
+                Text("提交")
+                    .font(.system(size: 11, weight: .medium))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!canCommit)
+            .help("只提交不推送")
         }
         .padding(.horizontal, 2)
-        .padding(.top, 8)
+        .padding(.top, 6)
         .padding(.bottom, 2)
     }
+
 
     /// 次要操作小按钮：图标 + 文字，视觉轻但可读（区别于主按钮）。
     private func secondaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -190,7 +181,7 @@ struct CommitView: View {
 
     private var fileList: some View {
         GlassCard(title: "代码变更", icon: "doc.on.doc",
-                  subtitle: "点击文件名可在右侧查看差异") {
+                  help: "点击文件名在右侧查看差异；悬停文件行可直接暂存 / 丢弃；右上可切换列表 / 目录树视图。") {
             VStack(alignment: .leading, spacing: 12) {
                 if !state.status.isClean {
                     HStack(spacing: 8) {
@@ -323,7 +314,7 @@ struct CommitView: View {
 
     private var diffPanel: some View {
         GlassCard(title: "差异预览", icon: "text.alignleft",
-                  subtitle: state.diffFilePath.isEmpty ? "点击左侧文件查看" : state.diffFilePath) {
+                  help: "点击左侧文件查看逐行改动；图片文件自动切换并排 / 滑块 / 差异分析对比。") {
             if let imageDiff = state.imageDiff, let imagePath = state.imageDiffPath, imagePath == state.diffFilePath {
                 // 图片变更：并排 / 滑块叠加 / 差异高亮
                 ImageDiffView(pair: imageDiff, filePath: imagePath)

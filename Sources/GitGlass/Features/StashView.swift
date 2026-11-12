@@ -68,7 +68,7 @@ struct StashView: View {
 
     private var stashCard: some View {
         GlassCard(title: "储藏改动", icon: "archivebox",
-                  subtitle: "临时收起当前改动，切换分支或遴选前特别有用",
+                  help: "临时收起当前改动，切换分支或遴选前特别有用；到本页随时恢复或丢弃。",
                   tint: GlassPalette.violet.opacity(0.06)) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 9) {
@@ -145,7 +145,7 @@ struct StashView: View {
 
     private var tagCard: some View {
         GlassCard(title: "标签", icon: "tag",
-                  subtitle: "给版本发布点做标记，\(state.tags.count) 个本地标签") {
+                  help: "给版本发布点做标记；标签可在历史详情中给任意提交补打。") {
             VStack(alignment: .leading, spacing: 11) {
                 HStack {
                     ActionButton(title: "新建标签", icon: "plus", prominent: true) { showTagSheet = true }
