@@ -15,7 +15,8 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                // 顶部一行：品牌 + 仓库/分支 + 操作（单一玻璃条，避免嵌套 HStack 宽度歧义）
+                // 仓库/分支与品牌已上移到系统标题栏（toolbar），
+                // 这里只留操作按钮（拉取/推送/刷新 + 刷新历史 + 更新 + 关于）
                 BrandHeader()
                     .padding(.bottom, 8)
                 tabBar
@@ -28,6 +29,61 @@ struct RootView: View {
         .navigationSplitViewStyle(.balanced)
         .background(GlassBackground())
         .frame(minWidth: 980, minHeight: 640)
+        // 系统标题栏：左侧品牌 + 仓库/分支胶囊（点击开分支选择器）
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    state.openAbout()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(nsImage: Brand.headerImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 16, height: 16)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        Text(Brand.name)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("关于 码牛 MooGit · 版本与检查更新")
+            }
+            ToolbarItem(placement: .navigation) {
+                if state.currentRepository != nil {
+                    Button {
+                        state.showBranchPickerSheet = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "folder.fill").font(.system(size: 9))
+                            Text(state.currentRepository?.name ?? "")
+                                .font(.system(size: 11, weight: .medium))
+                            Text("·").font(.system(size: 10)).foregroundStyle(.tertiary)
+                            Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
+                            Text(state.status.branch.isEmpty ? "—" : state.status.branch)
+                                .font(.system(size: 11, design: .monospaced))
+                            if state.status.ahead + state.status.behind > 0 {
+                                Text("↑\(state.status.ahead) ↓\(state.status.behind)")
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(GlassPalette.mint)
+                            }
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.primary.opacity(0.06), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("点击打开分支选择器：搜索、本地/远程、按来源折叠")
+                } else {
+                    EmptyView()
+                }
+            }
+        }
         .overlay(alignment: .bottom) {
             NoticeBanner().padding(.bottom, 22)
         }

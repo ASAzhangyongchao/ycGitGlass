@@ -42,104 +42,38 @@ struct BrandHeader: View {
     @Environment(AppState.self) private var state
     @State private var showRefreshHistory = false
 
+    /// 操作行：品牌与仓库/分支已上移系统标题栏，这里只留高频操作。
+    /// 图标+文字标签（可读优先），悬停浮起提示可点。
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                state.openAbout()
-            } label: {
-                HStack(spacing: 7) {
-                    Image(nsImage: Brand.headerImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 20, height: 20)
-                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .stroke(Color.white.opacity(0.55), lineWidth: 0.8)
-                        )
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(spacing: 5) {
-                            Text(Brand.name)
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                            Text(Brand.englishName)
-                                .font(.system(size: 9.5, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("查看关于、版本与检查更新")
-
-            if state.currentRepository != nil {
-                Button {
-                    state.showBranchPickerSheet = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder.fill").font(.system(size: 9))
-                        Text(state.currentRepository?.name ?? "")
-                            .font(.system(size: 11, weight: .medium))
-                            .lineLimit(1)
-                        Text("·").foregroundStyle(.tertiary)
-                        Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
-                        Text(state.status.branch.isEmpty ? "—" : state.status.branch)
-                            .font(.system(size: 11, design: .monospaced))
-                            .lineLimit(1)
-                        if state.status.ahead + state.status.behind > 0 {
-                            Text("↑\(state.status.ahead) ↓\(state.status.behind)")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(GlassPalette.mint)
-                        }
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.leading, 12)
-                    .padding(.trailing, 10)
-                    .padding(.vertical, 6)
-                    .glassPill(interactive: true)
-                }
-                .buttonStyle(.plain)
-                .help("点击打开分支选择器：搜索、本地/远程、按来源折叠")
-                .sheet(isPresented: Binding(
-                    get: { state.showBranchPickerSheet },
-                    set: { state.showBranchPickerSheet = $0 }
-                )) {
-                    BranchPickerSheet()
-                }
-            }
-
-            Spacer(minLength: 8)
-
+        HStack(spacing: 8) {
             if state.isBusy {
                 BusyBadge(label: state.busyLabel)
             }
 
-            Divider().frame(height: 14).opacity(0.5)
+            Spacer(minLength: 8)
 
-            SmallIconButton(icon: "arrow.down", helpText: "拉取（fast-forward，避免多余合并提交）") {
+            labeledIconButton(icon: "arrow.down", label: "拉取",
+                              help: "拉取远程改动（fast-forward，避免多余合并提交）") {
                 Task { await state.pull() }
             }
             .disabled(state.currentRepository == nil || state.isBusy)
 
-            SmallIconButton(icon: "arrow.up", helpText: "推送到远程；首次推送自动建立上游") {
+            labeledIconButton(icon: "arrow.up", label: "推送",
+                              help: "推送到远程；首次推送自动建立上游关联") {
                 Task { await state.push() }
             }
             .disabled(state.currentRepository == nil || state.isBusy)
 
-            SmallIconButton(icon: "arrow.clockwise", helpText: "手动刷新（⌘R）") {
+            labeledIconButton(icon: "arrow.clockwise", label: "刷新",
+                              help: "手动刷新（⌘R）：状态、分支、历史、远程源与密钥") {
                 Task { await state.refresh(reason: .manual) }
             }
             .disabled(state.isBusy)
 
             updateBadge
 
-            SmallIconButton(icon: "clock.arrow.circlepath", helpText: "刷新历史") {
+            labeledIconButton(icon: "clock.arrow.circlepath", label: "历史",
+                              help: "查看刷新历史") {
                 showRefreshHistory.toggle()
             }
             .popover(isPresented: $showRefreshHistory, arrowEdge: .bottom) {
@@ -164,7 +98,8 @@ struct BrandHeader: View {
                 .frame(width: 250, alignment: .leading)
             }
 
-            SmallIconButton(icon: "info.circle", helpText: "关于 码牛 MooGit · 版本 · GitHub") {
+            labeledIconButton(icon: "info.circle", label: "关于",
+                              help: "关于 码牛 MooGit · 版本 · GitHub · 检查更新") {
                 state.openAbout()
             }
         }
@@ -173,31 +108,44 @@ struct BrandHeader: View {
         .glassSurface(cornerRadius: 13, tint: GlassPalette.blue.opacity(0.07))
     }
 
-    /// 更新状态：有新版本时给出醒目入口；平时只留一个安静的刷新点。
+    /// 图标+文字标签按钮：悬停浮起 + 底色反馈（一眼看懂是什么功能）
+    private func labeledIconButton(icon: String, label: String, help: String,
+                                    action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(0.05),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .help(help)
+    }
+}
+
+extension BrandHeader {
+    /// 更新状态：有新版本时给出醒目入口；平时安静。
     @ViewBuilder
-    private var updateBadge: some View {
+    var updateBadge: some View {
         switch state.updateState {
         case .available(let info):
             Button {
                 state.openAbout()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "arrow.up.circle.fill")
                         .foregroundStyle(GlassPalette.mint)
                     Text("新版本 \(info.version)")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10.5, weight: .semibold))
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 5)
+                .background(GlassPalette.mint.opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
-            .glassPill(tint: GlassPalette.mint.opacity(0.16), interactive: true)
-            .help("有可用更新，点击查看")
-            .transition(.scale.combined(with: .opacity))
-        case .checking:
-            ProgressView()
-                .controlSize(.small)
-                .help("正在检查更新")
+            .help("发现新版本 \(info.version)，点击查看")
         default:
             EmptyView()
         }
