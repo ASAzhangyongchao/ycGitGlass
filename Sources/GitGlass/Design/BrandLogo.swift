@@ -74,32 +74,68 @@ struct BrandHeader: View {
             .help("查看关于、版本与检查更新")
 
             if state.currentRepository != nil {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder.fill").font(.system(size: 9))
-                    Text(state.currentRepository?.name ?? "")
-                        .font(.system(size: 11, weight: .medium))
-                        .lineLimit(1)
-                    Text("·").foregroundStyle(.tertiary)
-                    Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
-                    Text(state.status.branch.isEmpty ? "—" : state.status.branch)
-                        .font(.system(size: 11, design: .monospaced))
-                        .lineLimit(1)
-                    if state.status.ahead + state.status.behind > 0 {
-                        Text("↑\(state.status.ahead) ↓\(state.status.behind)")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(GlassPalette.mint)
+                Button {
+                    state.showBranchPickerSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder.fill").font(.system(size: 9))
+                        Text(state.currentRepository?.name ?? "")
+                            .font(.system(size: 11, weight: .medium))
+                            .lineLimit(1)
+                        Text("·").foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
+                        Text(state.status.branch.isEmpty ? "—" : state.status.branch)
+                            .font(.system(size: 11, design: .monospaced))
+                            .lineLimit(1)
+                        if state.status.ahead + state.status.behind > 0 {
+                            Text("↑\(state.status.ahead) ↓\(state.status.behind)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(GlassPalette.mint)
+                        }
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.tertiary)
                     }
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.leading, 12)
+                    .padding(.trailing, 10)
+                    .padding(.vertical, 6)
+                    .glassPill(interactive: true)
                 }
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .padding(.leading, 14)
-                .padding(.trailing, 14)
-                .padding(.vertical, 6)
-                .glassPill()
+                .buttonStyle(.plain)
+                .help("点击打开分支选择器：搜索、本地/远程、按来源折叠")
+                .sheet(isPresented: Binding(
+                    get: { state.showBranchPickerSheet },
+                    set: { state.showBranchPickerSheet = $0 }
+                )) {
+                    BranchPickerSheet()
+                }
             }
 
             Spacer(minLength: 8)
+
+            if state.isBusy {
+                BusyBadge(label: state.busyLabel)
+            }
+
+            Divider().frame(height: 14).opacity(0.5)
+
+            SmallIconButton(icon: "arrow.down", helpText: "拉取（fast-forward，避免多余合并提交）") {
+                Task { await state.pull() }
+            }
+            .disabled(state.currentRepository == nil || state.isBusy)
+
+            SmallIconButton(icon: "arrow.up", helpText: "推送到远程；首次推送自动建立上游") {
+                Task { await state.push() }
+            }
+            .disabled(state.currentRepository == nil || state.isBusy)
+
+            SmallIconButton(icon: "arrow.clockwise", helpText: "手动刷新（⌘R）") {
+                Task { await state.refresh(reason: .manual) }
+            }
+            .disabled(state.isBusy)
 
             updateBadge
 

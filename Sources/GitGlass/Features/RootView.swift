@@ -7,7 +7,6 @@ struct RootView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var newBranchName = ""
     @State private var showNewBranch = false
-    @State private var showBranchPicker = false
     @Namespace private var tabIndicator
 
     var body: some View {
@@ -16,12 +15,9 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                // 顶部一行：品牌 + 仓库/分支 + 操作（合并原 actionBar，省一整行）
-                HStack(spacing: 10) {
-                    BrandHeader()
-                    actionBarInline
-                }
-                .padding(.bottom, 8)
+                // 顶部一行：品牌 + 仓库/分支 + 操作（单一玻璃条，避免嵌套 HStack 宽度歧义）
+                BrandHeader()
+                    .padding(.bottom, 8)
                 tabBar
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -47,9 +43,6 @@ struct RootView: View {
                 newBranchName = ""
             }
         }
-        .sheet(isPresented: $showBranchPicker) {
-            BranchPickerSheet()
-        }
         .sheet(isPresented: Binding(
             get: { state.showAbout },
             set: { if !$0 { state.showAbout = false } }
@@ -65,58 +58,6 @@ struct RootView: View {
 
     // MARK: 操作行（仓库/分支信息已并入品牌行，这里只留动作，不再重复两遍）
 
-    /// 顶部操作区（并入品牌行）：分支选择器 + 拉取/推送/刷新紧凑图标
-    private var actionBarInline: some View {
-        HStack(spacing: 8) {
-            if state.isBusy {
-                BusyBadge(label: state.busyLabel)
-            }
-
-            branchMenu
-                .disabled(state.currentRepository == nil || state.isBusy)
-
-            SmallIconButton(icon: "arrow.down", helpText: "拉取（fast-forward，避免多余合并提交）") {
-                Task { await state.pull() }
-            }
-            .disabled(state.currentRepository == nil || state.isBusy)
-
-            SmallIconButton(icon: "arrow.up", helpText: "推送到远程；首次推送自动建立上游") {
-                Task { await state.push() }
-            }
-            .disabled(state.currentRepository == nil || state.isBusy)
-
-            SmallIconButton(icon: "arrow.clockwise", helpText: "手动刷新（⌘R）：状态、分支、历史、远程源与密钥") {
-                Task { await state.refresh(reason: .manual) }
-            }
-            .disabled(state.isBusy)
-        }
-    }
-
-
-
-    private var branchMenu: some View {
-        Button {
-            showBranchPicker = true
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 11, weight: .semibold))
-                Text(state.status.branch.isEmpty ? "选择分支" : state.status.branch)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: 180, alignment: .leading)
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .glassPill(interactive: true)
-        }
-        .buttonStyle(.plain)
-        .help("打开分支选择器：搜索、本地/远程分页、按来源折叠")
-    }
 
     // MARK: 分段控件（玻璃形变过渡）
 
@@ -164,24 +105,23 @@ struct RootView: View {
         .foregroundStyle(selected ? .primary : .secondary)
         .background {
             if selected {
-                // 选中胶囊：matchedGeometry 在页签间滑动（平滑体感的关键）
-                GeometryReader { proxy in
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(
-                            LinearGradient(colors: [GlassPalette.blue.opacity(0.18), GlassPalette.violet.opacity(0.14)],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(GlassPalette.blue.opacity(0.25), lineWidth: 1)
-                        )
-                        .shadow(color: GlassPalette.blue.opacity(0.15), radius: 6, y: 2)
-                        .frame(width: proxy.size.width - 6, height: proxy.size.height - 6)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .matchedGeometryEffect(id: "tab-indicator", in: tabIndicator)
-                .transition(.opacity)
-                .allowsHitTesting(false)
+                // 选中胶囊：matchedGeometry 在页签间滑动。
+                // 不用 GeometryReader——条件插入的背景 GeometryReader 在
+                // macOS 26 会向 AutoLayout 输出歧义约束（切页时崩溃根源）。
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        LinearGradient(colors: [GlassPalette.blue.opacity(0.18), GlassPalette.violet.opacity(0.14)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(GlassPalette.blue.opacity(0.25), lineWidth: 1)
+                    )
+                    .shadow(color: GlassPalette.blue.opacity(0.15), radius: 6, y: 2)
+                    .padding(3)
+                    .matchedGeometryEffect(id: "tab-indicator", in: tabIndicator)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
             }
         }
         .animation(reduceMotion ? nil : Motion.spring, value: state.selectedTab)

@@ -9,6 +9,8 @@ struct HistoryView: View {
     /// 定位闪烁状态：locateRequest 到来时滚动并高亮闪烁
     @State private var flashHash: String?
     @State private var flashOn = false
+    /// 内容区可用宽度（隐形探测器测量，驱动三栏/两栏策略）
+    @State private var viewportWidth: CGFloat = 1400
 
     var body: some View {
         if state.currentRepository == nil {
@@ -16,11 +18,18 @@ struct HistoryView: View {
         } else {
             VStack(alignment: .leading, spacing: 15) {
                 searchBar
-                // 宽度感知三栏策略：
-                // >= 1240pt 三栏并排；更窄时 Diff 阅读区以覆盖层显示在详情面板之上，
-                // 避免每栏被挤到 ~300px 无法阅读。
-                GeometryReader { geo in
-                    let wide = geo.size.width >= 1240
+                // 宽度感知三栏策略（探测式）：隐形探测器读取可用宽度，
+                // 不用 GeometryReader 包整棵树（避免约束歧义）。
+                ZStack(alignment: .topLeading) {
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { viewportWidth = geo.size.width }
+                            .onChange(of: geo.size.width) { _, w in viewportWidth = w }
+                    }
+                    .frame(height: 0)
+                    .allowsHitTesting(false)
+
+                    let wide = viewportWidth >= 1240
                     HStack(alignment: .top, spacing: 14) {
                         GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
                                   help: "彩色轨道 = 分支 / 合并关系；点提交看详情，详情里可定位 / 遴选 / 还原 / 打标签。",

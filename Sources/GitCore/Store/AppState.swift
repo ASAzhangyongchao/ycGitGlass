@@ -54,6 +54,8 @@ public final class AppState {
     /// 历史/提交页的专属 Diff 查看器（第三栏）：点变更文件后打开
     public var showDiffViewer = false
     public var showAbout = false
+    /// 分支选择器弹窗（顶部品牌行的仓库/分支胶囊触发）
+    public var showBranchPickerSheet = false
     /// 定位请求：详情面板「在列表中定位」按钮触发，历史列表滚动到该提交并闪烁高亮
     public var locateRequest: LocateRequest?
     public var updateState: UpdateState = .idle
