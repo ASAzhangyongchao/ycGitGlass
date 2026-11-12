@@ -24,13 +24,17 @@ struct HistoryView: View {
         state.commits.map(\.graph.count).max() ?? 0
     }
 
-    /// 自动策略：轨道够窄才显示
+    /// 自动策略：轨道够窄且按时间正序排列时才显示。
+    /// 非时间排序（旧→新会翻转 / 与作者排序会打散）下，
+    /// graph 字符的斜线方向和行的对应关系会失真，画出来就是错的。
     private var autoGraph: Bool {
-        maxGraphWidth <= graphLaneLimit * 2 + 2
+        maxGraphWidth <= graphLaneLimit * 2 + 2 && state.historySort == .newestFirst
     }
 
     private var showsGraph: Bool {
-        graphOverride ?? autoGraph
+        // 非时间正序排序下轨道必然失真，手动强制开也不给画（画了就是误导）
+        guard state.historySort == .newestFirst else { return false }
+        return graphOverride ?? autoGraph
     }
 
     var body: some View {
@@ -147,6 +151,9 @@ struct HistoryView: View {
                         get: { state.historyAllBranches },
                         set: { state.historyAllBranches = $0 }
                     ))
+                    .onChange(of: state.historyAllBranches) { _, _ in
+                        Task { await state.refresh(reason: .manual) }
+                    }
                     Divider()
                     Toggle("显示分支轨道", isOn: Binding(
                         get: { showsGraph },
@@ -313,7 +320,10 @@ struct HistoryView: View {
 
     @ViewBuilder
     private var historyList: some View {
-        if state.filteredCommits.isEmpty {
+        // 单次提取：filteredCommits 是纯内存过滤+排序，一次 body 里多处引用
+        // 不该重复计算 4 次（空态判断/轨道/列表/计数各一次）
+        let commits = state.filteredCommits
+        if commits.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 28, weight: .light))
@@ -336,14 +346,14 @@ struct HistoryView: View {
                         // 并行分支过多时自动隐藏（用户可从筛选菜单强制开关），
                         // 对应关系改看提交详情里的「分支图」弹层。
                         if showsGraph {
-                            CommitGraphColumn(commits: state.filteredCommits,
+                            CommitGraphColumn(commits: commits,
                                               rowHeight: Self.rowHeight)
                                 .padding(.top, 4)
                                 .transition(.opacity)
                         }
                         // 行内容层：固定行高与轨道对齐
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(state.filteredCommits) { commit in
+                            ForEach(commits) { commit in
                                 commitRow(commit)
                                     .id(commit.hash)
                             }

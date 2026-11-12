@@ -416,28 +416,139 @@ struct ImageDiffView: View {
         }
     }
 
-    // MARK: 差异分析（容差 + 统计）
+    // MARK: 差异分析（容差 + 统计）——后台计算 + 缓存，主线程零卡顿
+
+    /// 差异分析结果缓存：key = (图片对标识, 容差取整)。
+    /// 像素级计算 O(400万)，绝不能放主线程 body 里（此前每次拖滑块同步全图重算）。
+    @State private var cachedDiffImage: NSImage?
+    @State private var cachedDiffPercent: Double?
+    @State private var cachedDiffKey: String?
+    @State private var diffComputing = false
+
+    private var diffKey: String {
+        "\(pair.beforeData?.count ?? 0)-\(pair.afterData?.count ?? 0)-\(pair.beforeData?.hashValue ?? 0)-\(pair.afterData?.hashValue ?? 0)-\(Int(tolerance))"
+    }
+
+    /// 需要新旧两图都存在才计算
+    private var diffReady: Bool {
+        pair.beforeData != nil && pair.afterData != nil
+    }
+
+    /// 触发后台计算（容差变化时自动去重，同一 key 不重算）
+    private func scheduleDiffCompute() {
+        let key = diffKey
+        guard cachedDiffKey != key, !diffComputing else { return }
+        cachedDiffKey = key
+        cachedDiffImage = nil
+        cachedDiffPercent = nil
+        diffComputing = true
+        let beforeData = pair.beforeData
+        let afterData = pair.afterData
+        let tol = tolerance
+        Task.detached(priority: .userInitiated) {
+            let result = Self.computeDifference(beforeData: beforeData, afterData: afterData, tolerance: tol)
+            await MainActor.run {
+                if self.diffKey == key {
+                    self.cachedDiffImage = result?.image
+                    self.cachedDiffPercent = result?.percent ?? 0
+                    self.diffComputing = false
+                }
+            }
+        }
+    }
+
+    /// 纯函数像素比对（后台线程执行）：返回差异图 + 差异百分比。
+    /// 直接读 bitmap 原始字节（不再走 NSColor 转换），比 colorAt 快约一个数量级。
+    nonisolated static func computeDifference(beforeData: Data?, afterData: Data?,
+                                  tolerance: Double) -> (image: NSImage, percent: Double)? {
+        guard let beforeData, let afterData,
+              let beforeImage = NSImage(data: beforeData),
+              let afterImage = NSImage(data: afterData),
+              let beforeTiff = beforeImage.tiffRepresentation,
+              let afterTiff = afterImage.tiffRepresentation,
+              let beforeRep = NSBitmapImageRep(data: beforeTiff),
+              let afterRep = NSBitmapImageRep(data: afterTiff) else { return nil }
+
+        let width = max(beforeRep.pixelsWide, afterRep.pixelsWide)
+        let height = max(beforeRep.pixelsHigh, afterRep.pixelsHigh)
+        guard width > 0, height > 0, width * height <= 4_000_000 else { return nil }
+
+        guard let outRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+
+        // 预转换到统一的 RGBA 8bit 缓冲，避免逐像素 NSColor 色彩空间转换
+        func plane(of rep: NSBitmapImageRep) -> (data: [UInt8], w: Int, h: Int)? {
+            guard let cg = rep.cgImage else { return nil }
+            let w = rep.pixelsWide, h = rep.pixelsHigh
+            guard let ctx = CGContext(
+                data: nil, width: w, height: h,
+                bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return nil }
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            guard let buffer = ctx.data else { return nil }
+            let pointer = buffer.assumingMemoryBound(to: UInt8.self)
+            return ([UInt8](UnsafeBufferPointer(start: pointer, count: w * h * 4)), w, h)
+        }
+
+        guard let beforePlane = plane(of: beforeRep), let afterPlane = plane(of: afterRep) else { return nil }
+
+        let threshold = UInt32(tolerance * 7.65)
+        let outRowBytes = outRep.bytesPerRow
+        guard let outBuffer = outRep.bitmapData else { return nil }
+        var changed = 0
+        let bw = beforePlane.w, bh = beforePlane.h
+        let aw = afterPlane.w, ah = afterPlane.h
+        for y in 0..<height {
+            let by = min(y * bh / max(height, 1), bh - 1)
+            let ay = min(y * ah / max(height, 1), ah - 1)
+            for x in 0..<width {
+                let bx = min(x * bw / max(width, 1), bw - 1)
+                let ax = min(x * aw / max(width, 1), aw - 1)
+                let bo = (by * bw + bx) * 4
+                let ao = (ay * aw + ax) * 4
+                let dr = abs(Int(beforePlane.data[bo]) - Int(afterPlane.data[ao]))
+                let dg = abs(Int(beforePlane.data[bo + 1]) - Int(afterPlane.data[ao + 1]))
+                let db = abs(Int(beforePlane.data[bo + 2]) - Int(afterPlane.data[ao + 2]))
+                let isChanged = UInt32(dr + dg + db) > threshold
+                let o = y * outRowBytes + x * 3
+                if isChanged {
+                    changed += 1
+                    outBuffer[o] = 255; outBuffer[o + 1] = 51; outBuffer[o + 2] = 230
+                } else {
+                    outBuffer[o] = 13; outBuffer[o + 1] = 13; outBuffer[o + 2] = 20
+                }
+            }
+        }
+        let percent = Double(changed) / Double(width * height) * 100
+        let image = NSImage()
+        image.addRepresentation(outRep)
+        return (image, percent)
+    }
 
     private var differenceCompare: some View {
         VStack(spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color.black.opacity(0.82))
-                if bothExist, let diff = differenceImage {
+                if diffReady, let diff = cachedDiffImage {
                     Image(nsImage: diff)
                         .resizable()
                         .interpolation(.high)
                         .aspectRatio(contentMode: .fit)
                         .padding(4)
-                    // 差异区域洋红高亮层
-                    Image(nsImage: diff)
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .padding(4)
-                        .blendMode(.difference)
-                        .opacity(0.0)
-                } else if afterImage != nil || beforeImage != nil {
+                } else if diffComputing {
+                    VStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("正在逐像素分析…")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                } else if pair.beforeData != nil || pair.afterData != nil {
                     VStack(spacing: 8) {
                         Image(systemName: "square.stack.3d.up.slash")
                             .font(.system(size: 17))
@@ -452,19 +563,27 @@ struct ImageDiffView: View {
             }
             .frame(height: displayHeight)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .onAppear { scheduleDiffCompute() }
+            .onChange(of: tolerance) { _, _ in scheduleDiffCompute() }
 
             HStack(spacing: 10) {
-                if bothExist {
-                    let percent = differencePercent
+                if diffReady {
+                    let percent = cachedDiffPercent ?? 0
                     HStack(spacing: 6) {
                         Circle()
                             .fill(percent > 5 ? GlassPalette.rose : percent > 0.5 ? GlassPalette.amber : GlassPalette.mint)
                             .frame(width: 6, height: 6)
                         Text(percent > 5 ? "差异明显" : percent > 0.5 ? "有细微差异" : "基本一致")
                             .font(.system(size: 10, weight: .semibold))
-                        Text(String(format: "%.2f%% 像素不同", percent))
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                        if diffComputing {
+                            Text("重新计算中…")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            Text(String(format: "%.2f%% 像素不同", percent))
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 Spacer()
@@ -473,86 +592,6 @@ struct ImageDiffView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-    }
-
-    /// 用 CoreGraphics 逐像素计算差异图：黑色=一致，亮=不同（容差内视为一致）。
-    private var differenceImage: NSImage? {
-        guard let before = beforeImage, let after = afterImage,
-              let beforeTiff = before.tiffRepresentation,
-              let afterTiff = after.tiffRepresentation,
-              let beforeRep = NSBitmapImageRep(data: beforeTiff),
-              let afterRep = NSBitmapImageRep(data: afterTiff) else { return nil }
-
-        let width = max(beforeRep.pixelsWide, afterRep.pixelsWide)
-        let height = max(beforeRep.pixelsHigh, afterRep.pixelsHigh)
-        guard width > 0, height > 0, width * height <= 4_000_000 else { return nil }
-
-        guard let outRep = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
-            bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-        ) else { return nil }
-
-        let threshold = UInt32(tolerance * 7.65) // 百分比 → 0..255*3 的近似阈值
-        for y in 0..<height {
-            for x in 0..<width {
-                let b = samplePixel(beforeRep, x, y, width, height)
-                let a = samplePixel(afterRep, x, y, width, height)
-                let diff = abs(Int(b.0) - Int(a.0)) + abs(Int(b.1) - Int(a.1)) + abs(Int(b.2) - Int(a.2))
-                let changed = UInt32(diff) > threshold
-                // 黑=一致；洋红偏亮=差异（醒目且对色盲友好）
-                outRep.setColor(
-                    changed
-                        ? NSColor(red: 1.0, green: 0.2, blue: 0.9, alpha: 1)
-                        : NSColor(red: 0.05, green: 0.05, blue: 0.08, alpha: 1),
-                    atX: x, y: y)
-            }
-        }
-        let image = NSImage()
-        image.addRepresentation(outRep)
-        return image
-    }
-
-    private func samplePixel(_ rep: NSBitmapImageRep, _ x: Int, _ y: Int,
-                             _ width: Int, _ height: Int) -> (UInt8, UInt8, UInt8) {
-        // 尺寸不一致时按比例采样（保持可比性）
-        let sx = rep.pixelsWide > 0 ? x * rep.pixelsWide / max(width, 1) : 0
-        let sy = rep.pixelsHigh > 0 ? y * rep.pixelsHigh / max(height, 1) : 0
-        let color = rep.colorAt(x: min(sx, rep.pixelsWide - 1), y: min(sy, rep.pixelsHigh - 1))
-            ?? .black
-        let converted = color.usingColorSpace(.deviceRGB) ?? .black
-        return (UInt8(converted.redComponent * 255),
-                UInt8(converted.greenComponent * 255),
-                UInt8(converted.blueComponent * 255))
-    }
-
-    /// 差异像素百分比（与 differenceImage 同一套采样逻辑）。
-    private var differencePercent: Double {
-        guard let before = beforeImage, let after = afterImage,
-              let beforeTiff = before.tiffRepresentation,
-              let afterTiff = after.tiffRepresentation,
-              let beforeRep = NSBitmapImageRep(data: beforeTiff),
-              let afterRep = NSBitmapImageRep(data: afterTiff) else { return 0 }
-        let width = max(beforeRep.pixelsWide, afterRep.pixelsWide)
-        let height = max(beforeRep.pixelsHigh, afterRep.pixelsHigh)
-        guard width > 0, height > 0, width * height <= 4_000_000 else { return 0 }
-        let threshold = UInt32(tolerance * 7.65)
-        var changed = 0
-        // 大图抽样统计（步长按面积动态取，最多约 25 万采样点）
-        let total = width * height
-        let step = max(1, Int((Double(total) / 250_000.0).squareRoot()))
-        var sampled = 0
-        for y in stride(from: 0, to: height, by: step) {
-            for x in stride(from: 0, to: width, by: step) {
-                let b = samplePixel(beforeRep, x, y, width, height)
-                let a = samplePixel(afterRep, x, y, width, height)
-                let diff = abs(Int(b.0) - Int(a.0)) + abs(Int(b.1) - Int(a.1)) + abs(Int(b.2) - Int(a.2))
-                if UInt32(diff) > threshold { changed += 1 }
-                sampled += 1
-            }
-        }
-        guard sampled > 0 else { return 0 }
-        return Double(changed) / Double(sampled) * 100
     }
 
     // MARK: 共用元素

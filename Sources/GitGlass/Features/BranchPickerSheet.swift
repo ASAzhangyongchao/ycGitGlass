@@ -238,9 +238,10 @@ struct BranchPickerSheet: View {
 
     // MARK: 行
 
-    @State private var mergeTarget: String?
     @State private var mergeDirection: MergeDirection?
     @State private var mergeNoFF = false
+    /// 待删除的分支（confirmationDialog 用）
+    @State private var branchToDelete: String?
 
     enum MergeDirection: Identifiable {
         case intoCurrent(String)   // 把某分支合进当前
@@ -300,7 +301,7 @@ struct BranchPickerSheet: View {
         )
     }
 
-    /// 每行右侧的合并菜单：合入当前 / 合并过去
+    /// 每行右侧的合并菜单：合入当前 / 合并过去 / 删除分支
     private func mergeMenu(for branch: String) -> some View {
         Menu {
             Button {
@@ -315,6 +316,12 @@ struct BranchPickerSheet: View {
             }
             Divider()
             Toggle("保留合并提交（--no-ff）", isOn: $mergeNoFF)
+            Divider()
+            Button(role: .destructive) {
+                branchToDelete = branch
+            } label: {
+                Label("删除分支 \(branch)…", systemImage: "trash")
+            }
         } label: {
             Image(systemName: "arrow.triangle.merge")
                 .font(.system(size: 10.5, weight: .medium))
@@ -329,7 +336,7 @@ struct BranchPickerSheet: View {
         .confirmationDialog(
             mergeConfirmTitle,
             isPresented: Binding(
-                get: { mergeTarget == nil && mergeDirection != nil },
+                get: { mergeDirection != nil },
                 set: { if !$0 { mergeDirection = nil } }
             ),
             titleVisibility: .visible
@@ -348,6 +355,30 @@ struct BranchPickerSheet: View {
             Button("取消", role: .cancel) { mergeDirection = nil }
         } message: {
             Text(mergeConfirmMessage)
+        }
+        .confirmationDialog(
+            "删除分支 \(branchToDelete ?? "")？",
+            isPresented: Binding(
+                get: { branchToDelete != nil },
+                set: { if !$0 { branchToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("删除（已合并才允许）", role: .destructive) {
+                if let branch = branchToDelete {
+                    Task { await state.deleteBranch(branch, force: false) }
+                }
+                branchToDelete = nil
+            }
+            Button("强制删除（未合并也删）", role: .destructive) {
+                if let branch = branchToDelete {
+                    Task { await state.deleteBranch(branch, force: true) }
+                }
+                branchToDelete = nil
+            }
+            Button("取消", role: .cancel) { branchToDelete = nil }
+        } message: {
+            Text("普通删除只允许已合并的分支（安全）；强制删除会丢弃该分支上未合并的提交，不可恢复。")
         }
     }
 

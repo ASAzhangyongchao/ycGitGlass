@@ -130,6 +130,7 @@ struct CommitView: View {
             .buttonStyle(.borderedProminent)
             .tint(GlassPalette.mint)
             .disabled(!canCommit)
+            .keyboardShortcut(.return, modifiers: .command)
             .help("提交后自动推送；首次推送会建立上游关联（⌘⏎）")
 
             Button {
@@ -383,6 +384,7 @@ struct CommitView: View {
                                     in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.escape, modifiers: [])
                 .help("回到文件列表（⎋）")
 
                 Text((state.diffFilePath as NSString).lastPathComponent)
@@ -402,7 +404,7 @@ struct CommitView: View {
             .padding(.top, 6)
             .padding(.bottom, 8)
 
-            DiffViewerPanel()
+            DiffViewerPanel(source: .commit)
                 .frame(maxHeight: .infinity)
         }
     }

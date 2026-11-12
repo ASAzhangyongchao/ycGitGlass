@@ -6,7 +6,8 @@ import Observation
 /// 刷新策略（刻意设计，勿改）：
 /// 数据只在这 5 类事件后读取 —— 启动、手动点刷新、切换仓库、切换分支、写操作完成。
 /// 本文件没有任何 Timer / Task.sleep 循环 / DispatchSourceTimer / FSEvents / 文件描述符监听，
-/// 也不监听应用前后台切换；因此应用在空闲时 CPU 占用为 0。
+/// 也不监听应用前后台切换；数据层空闲时 CPU 占用为 0
+/// （侧边栏吉祥物的低频呼吸动画是唯一的渲染例外，见 MascotCow）。
 @Observable
 @MainActor
 public final class AppState {
@@ -250,6 +251,9 @@ public final class AppState {
     }
 
     /// 单次刷新并行拉取 5 类数据，避免串行 N 次进程等待。
+    /// 核心数据（status/branches/remotes/log/conflict）失败即整体失败；
+    /// 辅助数据（密钥/储藏/标签）失败降级为空——例如 ~/.ssh 权限异常
+    /// 不应导致整个仓库的 status 都看不到。
     private func loadAll(at path: String, reason: RefreshReason) async throws {
         let allBranches = historyAllBranches
         let bindings = keyPlatformBindings
@@ -263,17 +267,20 @@ public final class AppState {
         async let tagTask = git.tags(at: path)
         // 没有进行中的操作时，这个方法内部直接返回空，不产生额外进程。
         async let conflictTask = git.conflictedFilesIfNeeded(at: path)
-        let (newStatus, newBranches, newRemotes, newCommits, newKeys, newStashes, newTags, newConflicts) =
-            try await (statusTask, branchTask, remoteTask, logTask, keyTask, stashTask, tagTask, conflictTask)
+        let (newStatus, newBranches, newRemotes, newCommits, newConflicts) =
+            try await (statusTask, branchTask, remoteTask, logTask, conflictTask)
 
         status = newStatus
         branches = newBranches
         remotes = newRemotes
         commits = newCommits
-        keys = newKeys
-        stashes = newStashes
-        tags = newTags
         conflictedFiles = newConflicts
+
+        // 辅助数据降级：失败不影响核心视图
+        keys = (try? await keyTask) ?? []
+        stashes = (try? await stashTask) ?? []
+        tags = (try? await tagTask) ?? []
+
         // 分支名缓存：供侧边栏"按分支搜仓库"，纯内存构建零额外进程
         if let repoID = selectedRepoID {
             branchIndex[repoID] = newBranches.map { $0.name.lowercased() }
@@ -295,7 +302,11 @@ public final class AppState {
             remotes = []
             return
         }
+        // 记录发起时的仓库：排队等待期间用户可能又切了仓库，
+        // 醒来后仓库已变则跳过（最新一次刷新会带上新仓库的数据）
+        let expectedRepo = selectedRepoID
         await perform("正在读取仓库") {
+            guard self.selectedRepoID == expectedRepo else { return }
             try await self.loadAll(at: path, reason: reason)
         }
     }
@@ -535,15 +546,19 @@ public final class AppState {
         let message = commitMessage
         let branch = status.branch
         let upstream = hasUpstream
-        let remote = remotes.first?.name ?? "origin"
+        // 无远程源时推送步骤跳过：提交本身已成功，不该被 push 失败整体报错
+        let remote = remotes.first?.name
         await mutate(andPush ? "正在提交并推送" : "正在提交") {
             let hash = try await self.git.commit(message: message, at: path)
-            if andPush {
+            if andPush, let remote {
                 try await self.git.push(at: path, branch: branch, remote: remote, hasUpstream: upstream)
+                return "提交 \(hash) 已推送到 \(remote)"
             }
             self.commitMessage = ""
             self.selectedFilePaths = []
-            return andPush ? "提交 \(hash) 已推送到 \(remote)" : "提交成功 \(hash)"
+            return andPush && remote == nil
+                ? "提交成功 \(hash)（未配置远程源，跳过推送）"
+                : "提交成功 \(hash)"
         }
     }
 
@@ -556,14 +571,19 @@ public final class AppState {
         let message = commitMessage
         let branch = status.branch
         let upstream = hasUpstream
-        let remote = remotes.first?.name ?? "origin"
+        let remote = remotes.first?.name
         await mutate("正在一键提交") {
             try await self.git.stageAll(at: path)
             let hash = try await self.git.commit(message: message, at: path)
-            try await self.git.push(at: path, branch: branch, remote: remote, hasUpstream: upstream)
+            if let remote {
+                try await self.git.push(at: path, branch: branch, remote: remote, hasUpstream: upstream)
+                self.commitMessage = ""
+                self.selectedFilePaths = []
+                return "已提交 \(hash) 并推送到 \(remote)"
+            }
             self.commitMessage = ""
             self.selectedFilePaths = []
-            return "已提交 \(hash) 并推送到 \(remote)"
+            return "已提交 \(hash)（未配置远程源，跳过推送）"
         }
     }
 

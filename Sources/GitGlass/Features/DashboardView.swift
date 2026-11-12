@@ -96,6 +96,7 @@ struct DashboardView: View {
                 actionRow(number: "3", title: "一键提交全部并推送", caption: "自动暂存所有改动并生成简洁说明", icon: "paperplane.fill") {
                     Task { await state.quickCommitAll() }
                 }
+                .disabled(state.status.isClean)
                 // 说明：刷新按钮在顶栏（⌘R）、历史在页签（⌘3），这里不再重复放一份。
             }
         }

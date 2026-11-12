@@ -171,8 +171,14 @@ public struct GitService: Sendable {
         if create {
             args += ["-b", branch]
         } else if branch.contains("/") {
+            // 精确全等匹配：origin/a/x 只匹配本地 a/x，不会误中后缀巧合的分支
             let existing = try await self.branches(at: path).filter { !$0.isRemote }.map(\.name)
-            if let local = existing.first(where: { branch.hasSuffix("/" + $0) }) {
+            let remotePrefixes = try await self.branches(at: path)
+                .filter(\.isRemote)
+                .map { $0.name.split(separator: "/").first.map(String.init) ?? "" }
+            if let local = existing.first(where: { name in
+                remotePrefixes.contains { branch == "\($0)/\(name)" }
+            }) {
                 args.append(local)
             } else {
                 args += ["--track", branch]
@@ -214,7 +220,11 @@ public struct GitService: Sendable {
         if try await hasHEAD(at: path) {
             _ = try await run(path, ["reset"])
         } else {
-            _ = try await run(path, ["rm", "--cached", "-r", "."], unchecked: true)
+            // 空仓库：rm --cached 的退出码要检查，不能静默吞掉失败
+            let result = try await run(path, ["rm", "--cached", "-r", "."], unchecked: true)
+            guard result.exitCode == 0 else {
+                throw AppError.commandFailed(command: "rm", code: result.exitCode, message: result.stderr)
+            }
         }
     }
 
@@ -286,7 +296,13 @@ public struct GitService: Sendable {
             switch key {
             case "author": args.append("--author=\(value)")
             case "message": args.append("--grep=\(value)")
-            case "hash": args.append(value)
+            case "hash":
+                // 校验后再入参：防止 --exec / -O 这类以 - 开头的值被 git 当作选项解析
+                guard value.count >= 4, value.count <= 40,
+                      value.allSatisfy({ $0.isHexDigit || $0 == "*" }) else {
+                    throw AppError.invalidInput("hash: 后面要跟十六进制提交号（可用 * 通配）")
+                }
+                args.append(value)
             case "since": args.append("--since=\(value)")
             case "until": args.append("--until=\(value)")
             case "file", "path": trailing = ["--", value]

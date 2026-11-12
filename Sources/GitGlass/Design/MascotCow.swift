@@ -98,7 +98,9 @@ struct MascotCow: View {
     }
 
     private var workAnimation: Animation {
-        .easeInOut(duration: isBusy ? 0.26 : 1.0).repeatForever(autoreverses: true)
+        // 空闲呼吸放宽到 3.2s：贴纸"活着"的最低限度动感，渲染压力比 1s 版本降 2/3；
+        // 忙碌敲键保持 0.26s 高频（操作期间短暂，可接受）
+        .easeInOut(duration: isBusy ? 0.26 : 3.2).repeatForever(autoreverses: true)
     }
 
     private func startWork() {

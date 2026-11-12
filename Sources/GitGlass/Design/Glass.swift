@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - 动效系统
 // 全部为「事件驱动」动画：状态变化才插值，动画结束立刻停止。
-// 不使用 repeatForever / TimelineView / Timer / 循环 Timeline，空闲时渲染与 CPU 均为 0。
+// 无 Timer / 轮询 / 文件监听；唯一例外是侧边栏吉祥物贴纸（MascotCow）的
+// 低频呼吸动画（3.2s 周期）与忙碌抖动——属于刻意的品牌彩蛋，不影响交互性能。
 // 阻尼统一调高（0.86~0.90），减少弹跳带来的晃动，观感更舒适。
 enum Motion {
     static var spring: Animation { .spring(response: 0.44, dampingFraction: 0.86) }
@@ -30,6 +31,10 @@ enum GlassPalette {
     static var amber: Color { Color(red: 0.98, green: 0.68, blue: 0.28) }
     static var rose: Color { Color(red: 0.96, green: 0.42, blue: 0.46) }
 
+    /// 语义别名：成功绿 / 危险红（与 mint/rose 同源，语义化引用避免各处硬编码漂移）
+    static var success: Color { mint }
+    static var danger: Color { rose }
+
     /// 提交图轨道按 lane 轮换的颜色
     static let lanes: [Color] = [
         Color(red: 0.36, green: 0.58, blue: 0.98),
@@ -39,6 +44,15 @@ enum GlassPalette {
         Color(red: 0.96, green: 0.42, blue: 0.46),
         Color(red: 0.36, green: 0.76, blue: 0.90)
     ]
+}
+
+/// 行级容器统一底色：此前各页面手抄 0.035/0.045 两档，视觉微差不一致。
+/// 所有列表行/信息块背景统一引用此 token。
+extension View {
+    @ViewBuilder
+    func rowBackground() -> some View {
+        background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+    }
 }
 
 /// 静态渐变 + 柔光斑：不产生持续动画，只提供玻璃层的折射底材。

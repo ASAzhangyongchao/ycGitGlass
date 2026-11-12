@@ -112,6 +112,6 @@ struct ConflictPanel: View {
             .disabled(state.isBusy)
         }
         .padding(11)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .rowBackground()
     }
 }

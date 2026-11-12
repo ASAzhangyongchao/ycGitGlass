@@ -169,7 +169,7 @@ struct SSHKeyView: View {
             .disabled(state.isBusy)
         }
         .padding(12)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .rowBackground()
     }
 
     private var configCard: some View {

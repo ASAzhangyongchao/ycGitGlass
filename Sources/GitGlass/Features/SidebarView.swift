@@ -165,10 +165,10 @@ struct SidebarView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(matchedBranches, id: \.self) { branch in
                             Button {
+                                // 先弹分支选择器再选仓库：sheet 挂在当前视图树，
+                                // 避免此前 0.15s 魔法延迟期间用户点到别处打开过期仓库的弹窗
+                                showBranchPickerFor = repository
                                 state.selectRepository(repository.id)
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                    showBranchPickerFor = repository
-                                }
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.triangle.branch")

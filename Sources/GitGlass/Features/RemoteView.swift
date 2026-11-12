@@ -118,7 +118,7 @@ struct RemoteView: View {
             .frame(width: 74)
         }
         .padding(12)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .rowBackground()
     }
 
     private var syncCard: some View {

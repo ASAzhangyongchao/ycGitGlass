@@ -138,7 +138,7 @@ struct StashView: View {
             }
         }
         .padding(11)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .rowBackground()
     }
 
     // MARK: 标签
@@ -196,6 +196,6 @@ struct StashView: View {
             }
         }
         .padding(11)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .rowBackground()
     }
 }

@@ -7,6 +7,28 @@ import GitCore
 struct DiffViewerPanel: View {
     @Environment(AppState.self) private var state
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 数据源：.history 读详情字段（detailDiff），.commit 读工作区字段（diffText）。
+    /// 两页写入路径不同，此前只读详情字段导致提交页 diff 恒空态（已修）。
+    var source: DiffSource = .history
+
+    enum DiffSource {
+        case history, commit
+
+        var title: String { self == .history ? "变更内容" : "工作区变更" }
+        var emptyHint: String { self == .history ? "在详情里点一个变更文件" : "在左侧点一个文件" }
+        var emptySub: String {
+            self == .history ? "这里会以完整高度显示逐行差异或图片对比"
+                             : "这里会以完整高度显示这个文件的逐行差异或图片对比"
+        }
+    }
+
+    private var activeFile: String {
+        source == .history ? state.detailDiffFile : state.diffFilePath
+    }
+
+    private var activeText: String {
+        source == .history ? state.detailDiff : state.diffText
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -30,15 +52,15 @@ struct DiffViewerPanel: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(GlassPalette.blue)
             VStack(alignment: .leading, spacing: 2) {
-                Text("变更内容")
+                Text(source.title)
                     .font(.system(size: 12.5, weight: .bold))
-                Text(state.detailDiffFile.isEmpty ? "未选择文件" : (state.detailDiffFile as NSString).lastPathComponent)
+                Text(activeFile.isEmpty ? "未选择文件" : (activeFile as NSString).lastPathComponent)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            if let detail = state.commitDetail {
+            if source == .history, let detail = state.commitDetail {
                 StatusBadge(text: detail.shortHash, tint: GlassPalette.blue)
             }
             Spacer(minLength: 8)
@@ -55,7 +77,7 @@ struct DiffViewerPanel: View {
     @ViewBuilder
     private var content: some View {
         if let imageDiff = state.imageDiff, let imagePath = state.imageDiffPath,
-           imagePath == state.detailDiffFile {
+           imagePath == activeFile {
             ScrollView([.vertical]) {
                 ImageDiffView(pair: imageDiff, filePath: imagePath)
                     .padding(14)
@@ -68,15 +90,15 @@ struct DiffViewerPanel: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if state.detailDiff.isEmpty {
+        } else if activeText.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "doc.text.magnifyingglass")
                     .font(.system(size: 30, weight: .light))
                     .foregroundStyle(.tertiary)
-                Text("在详情里点一个变更文件")
+                Text(source.emptyHint)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                Text("这里会以完整高度显示逐行差异或图片对比")
+                Text(source.emptySub)
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
             }
@@ -84,7 +106,7 @@ struct DiffViewerPanel: View {
             .padding(20)
         } else {
             // 文本 diff：铺满整个面板
-            DiffTextView(text: state.detailDiff)
+            DiffTextView(text: activeText)
                 .padding(10)
         }
     }

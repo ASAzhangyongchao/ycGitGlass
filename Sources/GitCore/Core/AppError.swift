@@ -70,7 +70,7 @@ public enum AppError: Error, LocalizedError, Equatable, Sendable {
         if s.contains("could not resolve host") || s.contains("could not read from remote repository") {
             return "连不上远程仓库：检查网络与远程源地址"
         }
-        if s.contains("remote .* already exists") || s.contains("already exists") { return "同名远程源已存在" }
+        if s.contains("already exists") { return "同名远程源已存在" }
         if s.contains("pathspec") { return "文件已不在工作区，点刷新重新读取状态" }
         if s.contains("unprotected private key file") || s.contains("permissions 0") {
             return "私钥文件权限太开放，需要改为 600"
@@ -82,8 +82,20 @@ public enum AppError: Error, LocalizedError, Equatable, Sendable {
         if s.contains("would be overwritten by checkout") || s.contains("local changes") {
             return "有未提交的改动会切丢，请先提交或暂存"
         }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = sanitizeCredentials(raw.trimmingCharacters(in: .whitespacesAndNewlines))
         return trimmed.isEmpty ? "Git 命令执行失败" : String(trimmed.prefix(240))
+    }
+
+    /// 凭据脱敏：git 报错常原样包含 https://user:token@host 的远程地址，
+    /// 展示前替换为 https://host，避免令牌泄漏到错误横幅/日志。
+    private static func sanitizeCredentials(_ text: String) -> String {
+        guard text.contains("://"), text.contains("@") else { return text }
+        // scheme://user:pass@host → scheme://host（ userinfo 部分整段去掉）
+        return text.replacingOccurrences(
+            of: #"([a-zA-Z][a-zA-Z0-9+.-]*)://[^\s/@]+@"#,
+            with: "$1://",
+            options: .regularExpression
+        )
     }
 
     private static func translateSuggestion(_ raw: String) -> String {

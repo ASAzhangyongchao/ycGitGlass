@@ -29,12 +29,14 @@ public struct CommandRunner: Sendable {
         arguments: [String],
         workingDirectory: URL? = nil,
         environmentOverrides: [String: String] = [:],
+        stdin: String? = nil,
         timeout: TimeInterval = 20
     ) async throws -> CommandResult {
         let directory = workingDirectory?.path
         let overrides = environmentOverrides
         let tool = executable
         let args = arguments
+        let input = stdin
         let limit = timeout
         return try await Task.detached(priority: .userInitiated) {
             try CommandRunner.execute(
@@ -42,6 +44,7 @@ public struct CommandRunner: Sendable {
                 arguments: args,
                 workingDirectory: directory,
                 environmentOverrides: overrides,
+                stdin: input,
                 timeout: limit
             )
         }.value
@@ -146,6 +149,7 @@ public struct CommandRunner: Sendable {
         arguments: [String],
         workingDirectory: String?,
         environmentOverrides: [String: String],
+        stdin: String? = nil,
         timeout: TimeInterval
     ) throws -> CommandResult {
         guard FileManager.default.isExecutableFile(atPath: executable) else {
@@ -184,6 +188,18 @@ public struct CommandRunner: Sendable {
         let errHandle = try FileHandle(forWritingTo: errURL)
         process.standardOutput = outHandle
         process.standardError = errHandle
+        // stdin：敏感输入（如 SSH 密码短语）走临时文件而非 argv，避免出现在 ps 进程列表
+        if let stdinInput = stdin, let inputData = stdinInput.data(using: .utf8) {
+            let tmpInPath = fm.temporaryDirectory
+                .appendingPathComponent("gitglass-\(UUID().uuidString)-in").path
+            if fm.createFile(atPath: tmpInPath, contents: inputData) {
+                process.standardInput = try? FileHandle(forReadingFrom: URL(fileURLWithPath: tmpInPath))
+                let cleanupPath = tmpInPath
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout + 5) {
+                    try? FileManager.default.removeItem(atPath: cleanupPath)
+                }
+            }
+        }
 
         do {
             try process.run()

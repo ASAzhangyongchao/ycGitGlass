@@ -128,11 +128,34 @@ public struct SSHKeyService: Sendable {
             throw AppError.ssh("「\(platform.name)」的密钥已存在，直接复制公钥即可，不会覆盖旧密钥")
         }
         let comment = email.isEmpty ? "GitGlass-\(platform.name)" : "\(platform.name)-\(email)"
-        let result = try await runner.run(
-            executable: keygen,
-            arguments: ["-t", "ed25519", "-C", comment, "-f", privateURL.path, "-N", passphrase, "-q"],
-            timeout: 30
-        )
+        // 密码短语走 stdin 而非 argv：argv 会短暂出现在 `ps` 进程列表里。
+        // ssh-keygen -p 场景从 stdin 读；生成时用 -N -（占位）不可靠，
+        // 这里改为：无密码短语直接 -N ""；有密码短语时先无密码生成再当场加改。
+        var result: CommandResult
+        if passphrase.isEmpty {
+            result = try await runner.run(
+                executable: keygen,
+                arguments: ["-t", "ed25519", "-C", comment, "-f", privateURL.path, "-N", "", "-q"],
+                timeout: 30
+            )
+        } else {
+            // 生成无密码密钥 → 立即通过 stdin 交互补上密码短语（不经过 argv）
+            result = try await runner.run(
+                executable: keygen,
+                arguments: ["-t", "ed25519", "-C", comment, "-f", privateURL.path, "-N", "", "-q"],
+                timeout: 30
+            )
+            guard result.exitCode == 0 else {
+                throw AppError.ssh("生成密钥失败：\(AppError.translate(result.stderr))")
+            }
+            let oldStdin = "old\n\(passphrase)\n\(passphrase)\n"
+            result = try await runner.run(
+                executable: keygen,
+                arguments: ["-p", "-f", privateURL.path],
+                stdin: oldStdin,
+                timeout: 30
+            )
+        }
         guard result.exitCode == 0 else {
             throw AppError.ssh("生成密钥失败：\(AppError.translate(result.stderr))")
         }

@@ -258,6 +258,16 @@ open dist/码牛 MooGit.app</code></pre>
   <h3>提交详情面板</h3>
   <p>点列表任意一条，右侧滑出详情：完整提交号（可复制）、作者 / 提交者 / 时间 / 父提交 / 引用、文件数与增删行统计、说明正文、操作按钮、按目录折叠的变更文件树、逐文件 diff。</p>
 
+  <h3>本地合并（双向）与删除分支</h3>
+  <p>点顶栏「仓库/分支胶囊」打开分支选择器，每个非当前分支行右侧的合并图标菜单可：</p>
+  <ul>
+    <li><strong>把 X 合并进当前分支</strong>：常规 <code>git merge X</code></li>
+    <li><strong>把当前分支合并到 X</strong>：自动切到 X → 合并当前 → 切回；冲突时停在 X 上</li>
+    <li><strong>保留合并提交（--no-ff）</strong>：强制生成合并提交保留分支拓扑</li>
+    <li><strong>删除分支</strong>：普通删除仅限已合并分支；强制删除丢弃未合并提交（二次确认）</li>
+  </ul>
+  <h3>轨道自动适配</h3>
+  <p>并行分支过多时轨道列自动收起，宽度让给提交信息；工具栏图标可手动三态切换；提交详情「分支关系」弹层显示前后 ±8 条局部轨道。按作者或旧→新排序时轨道自动隐藏（行序打乱会失真）。</p>
   <h3>遴选 Cherry-pick（借鉴 Sourcetree）</h3>
   <ol>
     <li>找到目标提交（必要时勾「全部分支」或深度搜索）。</li>
@@ -342,6 +352,7 @@ open dist/码牛 MooGit.app</code></pre>
     <tr><td><span class="kbd">⌘L</span></td><td>拉取</td><td><span class="kbd">⌘4</span></td><td>储藏 / 标签</td></tr>
     <tr><td><span class="kbd">⇧⌘P</span></td><td>推送</td><td><span class="kbd">⌘5</span></td><td>远程源</td></tr>
     <tr><td><span class="kbd">⌥⌘S</span></td><td>储藏当前改动</td><td><span class="kbd">⌘6</span></td><td>密钥</td></tr>
+    <tr><td><span class="kbd">⌘⏎</span></td><td>提交并推送（提交页）</td><td><span class="kbd">⎋</span></td><td>返回文件列表（沉浸式 diff）</td></tr>
     <tr><td><span class="kbd">⌘1</span></td><td>工作台</td><td><span class="kbd">⌘2</span></td><td>提交</td></tr>
   </table>
 </section>
