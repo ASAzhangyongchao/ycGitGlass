@@ -589,6 +589,15 @@ public final class AppState {
 
     public func loadDiff(for file: FileChange) async {
         guard let path = currentPath else { return }
+        // Inspector 交互：再点同一个文件 = 收起面板（toggle）；
+        // 点不同文件 = 就地切换内容。列表上下文始终保持。
+        if diffFilePath == file.path {
+            diffFilePath = ""
+            diffText = ""
+            imageDiff = nil
+            imageDiffPath = nil
+            return
+        }
         diffFilePath = file.path
         imageDiff = nil
         imageDiffPath = nil

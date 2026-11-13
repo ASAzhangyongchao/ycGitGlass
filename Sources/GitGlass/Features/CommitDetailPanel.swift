@@ -10,11 +10,33 @@ struct CommitDetailPanel: View {
     @State private var showTagSheet = false
     @State private var showGraphPopover = false
     @State private var tagName = ""
+    /// true=独立面板模式（自带玻璃外壳/阴影/关闭钮）；false=嵌入 InspectorPanel 模式
+    /// （外壳和关闭由容器统一提供，这里只出内容）。
+    var showsOwnChrome: Bool = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                header
+                if showsOwnChrome {
+                    header
+                } else if let commit = state.selectedCommit {
+                    // 嵌入 InspectorPanel 模式：紧凑标题行 + 关闭钮
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("提交详情")
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            Text(commit.subject)
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .lineLimit(2)
+                        }
+                        Spacer(minLength: 6)
+                        SmallIconButton(icon: "xmark", helpText: "关闭详情（⎋）") {
+                            state.closeDetail()
+                        }
+                        .keyboardShortcut(.escape, modifiers: [])
+                    }
+                }
                 if let detail = state.commitDetail {
                     metadata(detail)
                     statistics(detail)
@@ -32,10 +54,8 @@ struct CommitDetailPanel: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 300, idealWidth: 360, maxWidth: 380)
-        .glassSurface(cornerRadius: 20, tint: GlassPalette.blue.opacity(0.06))
-        .cardShadow(elevated: true)
-        .panelTransition()
+        .frame(minWidth: 300, maxWidth: 480)
+        .modifier(PanelChrome(enabled: showsOwnChrome))
         .alert("遴选到当前分支？", isPresented: $showCherryPickConfirm) {
             Button("取消", role: .cancel) {}
             Button("遴选") {
@@ -397,3 +417,20 @@ struct CommitGraphPopover: View {
     }
 }
 
+
+
+/// 面板外壳按需开关：独立模式给玻璃面+阴影+滑入动画；嵌入模式无外壳。
+struct PanelChrome: ViewModifier {
+    var enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .glassSurface(cornerRadius: 20, tint: GlassPalette.blue.opacity(0.06))
+                .cardShadow(elevated: true)
+                .panelTransition()
+        } else {
+            content
+                .padding(.top, 10)
+        }
+    }
+}

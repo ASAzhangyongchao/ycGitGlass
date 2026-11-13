@@ -16,8 +16,10 @@ struct CommitView: View {
             EmptyStateView(title: "还没有仓库", message: "先在左侧添加一个 Git 仓库。", icon: "folder")
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                if state.diffFilePath.isEmpty {
-                    // 普通模式：文件列表独占（原右侧 diff 栏取消，列表全宽）
+                // Inspector 模式（Slack/Linear 式）：文件列表常驻左侧，
+                // 点文件在右侧就地展开 diff 预览——不打断列表上下文，
+                // 不用「进全屏再返回」。窄窗口自动变浮层盖在列表右侧。
+                HStack(alignment: .top, spacing: 12) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             fileList
@@ -25,14 +27,18 @@ struct CommitView: View {
                         .padding(.vertical, 6)
                         .padding(.bottom, 4)
                     }
+                    .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
                     .onTapGesture { commitEditorFocused = false }
-                } else {
-                    // 沉浸模式：点击文件后全宽大画面查看变更，返回回列表。
-                    // layoutPriority(1)：diff 面板优先占高度，绝不被底部
-                    // 提交栏（TextEditor 撑高时）挤压成 0 高空白。
-                    immersiveDiff
-                        .layoutPriority(1)
-                    Spacer(minLength: 0)
+
+                    if !state.diffFilePath.isEmpty {
+                        InspectorAdaptiveContainer(compactThreshold: 860) {
+                            InspectorPanel(key: "commit.diff",
+                                           minWidth: 360, maxWidth: 760, defaultWidth: 470) {
+                                diffInspector
+                            }
+                        }
+                        .frame(maxHeight: .infinity)
+                    }
                 }
                 // 提交说明卡钉在底部：文件区先滚动，写说明和提交按钮常驻可见
                 composer
@@ -370,43 +376,43 @@ struct CommitView: View {
         return GlassPalette.amber
     }
 
-    // MARK: 差异预览
+    // MARK: 右侧差异 Inspector
 
-    /// 全宽沉浸式 diff 视图：文件名 + 返回 + 内容铺满
-    private var immersiveDiff: some View {
+    /// 关闭右侧 diff 预览（清状态，列表回到全宽）
+    private func closeDiffInspector() {
+        state.diffFilePath = ""
+        state.diffText = ""
+        state.imageDiff = nil
+        state.imageDiffPath = nil
+    }
+
+    /// 右侧 diff 预览内容：头部信息行（不含返回按钮——那是全屏时代的设计）
+    /// + 关闭 + ESC + 教学问号，正文复用 DiffViewerPanel。
+    private var diffInspector: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 10) {
-                Button {
-                    state.diffFilePath = ""
-                    state.diffText = ""
-                    state.imageDiff = nil
-                    state.imageDiffPath = nil
-                } label: {
-                    Label("返回列表", systemImage: "chevron.left")
-                        .font(.system(size: 11, weight: .medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.primary.opacity(0.06),
-                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.escape, modifiers: [])
-                .help("回到文件列表（⎋）")
-
                 Text((state.diffFilePath as NSString).lastPathComponent)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                Text(state.diffFilePath)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
                 HelpQuestionButton(tip: Teachings.commitDiff, arrowEdge: .bottom)
 
                 Spacer(minLength: 0)
+
+                Button {
+                    closeDiffInspector()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 22)
+                        .background(Color.primary.opacity(0.06),
+                                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.escape, modifiers: [])
+                .help("关闭预览（⎋）；再点列表里同一个文件也可以收起")
             }
             .padding(.horizontal, 4)
             .padding(.top, 6)
@@ -416,6 +422,4 @@ struct CommitView: View {
                 .frame(maxHeight: .infinity)
         }
     }
-
-
 }

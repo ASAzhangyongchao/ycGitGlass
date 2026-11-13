@@ -63,7 +63,7 @@ struct HistoryView: View {
                 .frame(height: 0)
                 .allowsHitTesting(false)
 
-                let wide = viewportWidth >= 1240
+                let wide = viewportWidth >= 1100
                 HStack(alignment: .top, spacing: 14) {
                     GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
                               help: "彩色轨道 = 分支 / 合并关系；点提交看详情。",
@@ -76,20 +76,29 @@ struct HistoryView: View {
                            idealWidth: 480,
                            maxWidth: .infinity, maxHeight: .infinity)
 
+                    // 详情 + （窄屏时叠加的）diff：ZStack 只在窄屏叠 diff 浮层
                     ZStack(alignment: .topTrailing) {
+                        // 提交详情 Inspector：宽度可拖、记忆、可关闭。
+                        // 点另一个提交 = 就地切换内容（列表不动）。
                         if state.showDetailPanel {
-                            CommitDetailPanel()
-                                .frame(maxHeight: .infinity)
+                            InspectorPanel(key: "history.detail",
+                                           minWidth: 320, maxWidth: 480, defaultWidth: 380) {
+                                CommitDetailPanel(showsOwnChrome: false)
+                            }
+                            .frame(maxHeight: .infinity)
                         }
-                        // 窄窗口：Diff 覆盖在详情上（带关闭按钮），列表保持可读宽度
+                        // 窄窗口：diff 盖在详情上（详情暂时让位），列表保持可读宽度
                         if state.showDiffViewer && !wide {
-                            DiffViewerPanel()
+                            InspectorPanel(key: "history.diff",
+                                           minWidth: 320, maxWidth: 560, defaultWidth: 430) {
+                                DiffViewerPanel()
+                            }
+                            .frame(maxHeight: .infinity)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: .black.opacity(0.2), radius: 16, y: 5)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                         }
-                    }
-
-                    // 宽窗口：第三栏并排
-                    if state.showDiffViewer && wide {
-                        DiffViewerPanel()
                     }
                 }
             }
