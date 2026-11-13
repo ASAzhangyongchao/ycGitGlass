@@ -97,6 +97,7 @@ struct BranchPickerSheet: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
+            HelpQuestionButton(tip: Teachings.mergeBranches, arrowEdge: .bottom)
             if state.isBusy {
                 BusyBadge(label: state.busyLabel)
             }

@@ -95,6 +95,12 @@ enum SnapshotMode {
                     HeightProbe(label: "normal") { MascotCow(isBusy: false) }
                     HeightProbe(label: "angry") { MascotCow(isBusy: false, initiallyAngry: true) }
                 }.padding(40))
+            case "teaching":
+                // 教学弹层直渲染：验证 TeachingTipView 内容完整性
+                return AnyView(HStack(spacing: 20) {
+                    TeachingTipView(tip: Teachings.commitFiles)
+                    TeachingTipView(tip: Teachings.mascot)
+                }.padding(30).environment(state))
             default: return AnyView(HistoryView().environment(state))
             }
         }()

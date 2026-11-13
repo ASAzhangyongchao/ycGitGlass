@@ -159,9 +159,12 @@ struct CommitDetailPanel: View {
 
     private var actions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("对这条提交做什么")
-                .font(.system(size: 10.5, weight: .semibold))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text("对这条提交做什么")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                HelpQuestionButton(tip: Teachings.cherryRevert, arrowEdge: .bottom)
+            }
             HStack(spacing: 5) {
                 smallActionButton("遴选", icon: "arrow.triangle.merge", tint: GlassPalette.accent) {
                     showCherryPickConfirm = true
@@ -229,9 +232,12 @@ struct CommitDetailPanel: View {
                     .font(.system(size: 10.5, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                SmallIconButton(icon: "point.3.connected.trianglepath.dotted",
-                                helpText: "在弹层中查看这条提交前后的分支轨道") {
-                    showGraphPopover = true
+                HStack(spacing: 8) {
+                    HelpQuestionButton(tip: Teachings.branchPopover, arrowEdge: .bottom)
+                    SmallIconButton(icon: "point.3.connected.trianglepath.dotted",
+                                    helpText: "在弹层中查看这条提交前后的分支轨道") {
+                        showGraphPopover = true
+                    }
                 }
             }
             if state.selectedCommit?.graph.contains("*") == true

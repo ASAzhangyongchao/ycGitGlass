@@ -66,7 +66,9 @@ struct HistoryView: View {
                 let wide = viewportWidth >= 1240
                 HStack(alignment: .top, spacing: 14) {
                     GlassCard(title: "提交历史", icon: "clock.arrow.circlepath",
-                              help: "彩色轨道 = 分支 / 合并关系；点提交看详情，详情里可定位 / 遴选 / 还原 / 打标签。",
+                              help: "彩色轨道 = 分支 / 合并关系；点提交看详情。",
+                              helpSteps: Teachings.historyGraph.steps,
+                              helpFootnote: Teachings.historyGraph.footnote,
                               padding: 14) {
                         historyList
                     }
@@ -213,6 +215,8 @@ struct HistoryView: View {
             }
 
             Spacer(minLength: 8)
+
+            HelpQuestionButton(tip: Teachings.historySearch, arrowEdge: .bottom)
 
             if state.historyAuthorFilter != nil {
                 Button {

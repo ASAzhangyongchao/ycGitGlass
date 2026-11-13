@@ -69,6 +69,8 @@ struct StashView: View {
     private var stashCard: some View {
         GlassCard(title: "储藏改动", icon: "archivebox",
                   help: "临时收起当前改动，切换分支或遴选前特别有用；到本页随时恢复或丢弃。",
+                  helpSteps: Teachings.stashes.steps,
+                  helpFootnote: Teachings.stashes.footnote,
                   tint: GlassPalette.violet.opacity(0.06)) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 9) {

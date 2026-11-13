@@ -20,7 +20,10 @@ struct RemoteView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     toolbar
                     GlassCard(title: "Git 远程源", icon: "network",
-                              subtitle: "一个仓库可以同时有多个远程源，例如 origin 与 upstream") {
+                              subtitle: "一个仓库可以同时有多个远程源，例如 origin 与 upstream",
+                              help: "远程源 = 托管服务器上的仓库地址，推送 / 拉取都从这里走。",
+                              helpSteps: Teachings.remotes.steps,
+                              helpFootnote: Teachings.remotes.footnote) {
                         if state.remotes.isEmpty {
                             VStack(spacing: 10) {
                                 Image(systemName: "network.slash")
@@ -123,7 +126,13 @@ struct RemoteView: View {
 
     private var syncCard: some View {
         GlassCard(title: "同步操作", icon: "arrow.triangle.2.circlepath",
-                  subtitle: "每次操作完成后会自动刷新一次状态") {
+                  subtitle: "每次操作完成后会自动刷新一次状态",
+                  help: "抓取 vs 拉取：抓取只下载不合并（安全）；拉取下载并自动合并到当前分支。",
+                  helpSteps: [
+                    .init("arrow.down.to.line", "抓取 Fetch", "只下载远程新提交，不动你的工作区；想先看看再合并时用。"),
+                    .init("arrow.down.circle", "拉取 Pull", "下载并自动合并到当前分支；日常同步首选。"),
+                    .init("arrow.up.circle", "推送 Push", "把本地提交上传到远程；被拒就先拉取再推。"),
+                  ]) {
             HStack(spacing: 9) {
                 ActionButton(title: "抓取", icon: "arrow.down.to.line") {
                     Task { await state.fetch() }

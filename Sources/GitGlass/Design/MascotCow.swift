@@ -65,6 +65,11 @@ struct MascotCow: View {
                     radius: angry ? 10 : 5, y: 3)
             .overlay { angryFace }
             .overlay(alignment: .topTrailing) { sweat }
+            // 使用教学问号：悬停提示 + 点击弹出玩法说明（不与贴纸点击冲突）
+            .overlay(alignment: .topLeading) {
+                HelpQuestionButton(tip: Teachings.mascot, arrowEdge: .top)
+                    .offset(x: -4, y: -4)
+            }
             .hueRotation(.degrees(angry ? -14 : 0))
             .saturation(angry ? 1.3 : 1.0)
             // 贴纸物理动画：

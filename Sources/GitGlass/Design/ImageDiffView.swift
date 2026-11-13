@@ -110,6 +110,8 @@ struct ImageDiffView: View {
 
             Spacer(minLength: 0)
 
+            HelpQuestionButton(tip: Teachings.imageDiff, arrowEdge: .bottom)
+
             // 缩放开关（并排/滑块/差异可用）
             if mode != .fade && mode != .blink {
                 SmallIconButton(icon: zoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",

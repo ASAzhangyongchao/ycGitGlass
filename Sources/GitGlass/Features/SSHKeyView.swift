@@ -174,7 +174,14 @@ struct SSHKeyView: View {
 
     private var configCard: some View {
         GlassCard(title: "写入 SSH 配置", icon: "terminal",
-                  subtitle: "让不同平台自动选用对应密钥，避免多账号串号") {
+                  subtitle: "让不同平台自动选用对应密钥，避免多账号串号",
+                  help: "为每个平台生成专属 Host 配置块，推拉时自动选对密钥。",
+                  helpSteps: [
+                    .init("1.circle", "生成密钥", "上方列表选平台 → 生成；每个平台一把独立钥匙。"),
+                    .init("2.circle", "复制公钥", "粘贴到平台账号的 SSH Keys 设置。"),
+                    .init("3.circle", "写入配置", "点本卡按钮把平台 → 密钥映射写进 ~/.ssh/config；首次写入自动备份原文件。"),
+                  ],
+                  helpFootnote: "只替换应用自己带标记的块，你手写的 Host 配置原样保留。") {
             VStack(alignment: .leading, spacing: 11) {
                 InfoHint(
                     text: "会为每个「已有私钥 + 已填域名」的平台生成 Host 配置（IdentitiesOnly yes）。首次写入自动备份原文件为 config.gitglass.bak。",

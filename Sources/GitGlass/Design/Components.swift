@@ -10,6 +10,10 @@ struct GlassCard<Content: View>: View {
     var subtitle: String? = nil
     /// 长说明收进标题行的小问号弹泡，不再独占一行。
     var help: String? = nil
+    /// 教学步骤（配合 help 显示在弹泡里；helpSteps 有值时弹泡升级为分步教学）
+    var helpSteps: [TeachingTip.Step] = []
+    /// 教学脚注（彩蛋 / 注意事项）
+    var helpFootnote: String? = nil
     var tint: Color? = nil
     var padding: CGFloat = 18
     @ViewBuilder var content: Content
@@ -17,12 +21,16 @@ struct GlassCard<Content: View>: View {
     @State private var helpDismissTask: Task<Void, Never>?
 
     init(title: String? = nil, icon: String? = nil, subtitle: String? = nil,
-         help: String? = nil, tint: Color? = nil, padding: CGFloat = 18,
+         help: String? = nil, helpSteps: [TeachingTip.Step] = [],
+         helpFootnote: String? = nil,
+         tint: Color? = nil, padding: CGFloat = 18,
          @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.subtitle = subtitle
         self.help = help
+        self.helpSteps = helpSteps
+        self.helpFootnote = helpFootnote
         self.tint = tint
         self.padding = padding
         self.content = content()
@@ -52,35 +60,25 @@ struct GlassCard<Content: View>: View {
                         } label: {
                             Image(systemName: "questionmark.circle")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(showHelp ? GlassPalette.accent : Color.secondary)
+                                .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
-                        .popover(isPresented: $showHelp, arrowEdge: .bottom) {
-                            Text(help)
-                                .font(.system(size: 11.5))
-                                .foregroundStyle(.secondary)
-                                .padding(14)
-                                .frame(width: 268, alignment: .leading)
-                                .onHover { hovering in
-                                    // 悬停时保持显示；离开后 1.2 秒收起
-                                    if hovering {
-                                        helpDismissTask?.cancel()
-                                    } else {
-                                        helpDismissTask?.cancel()
-                                        helpDismissTask = Task { @MainActor in
-                                            try? await Task.sleep(for: .seconds(1.2))
-                                            if !Task.isCancelled { showHelp = false }
-                                        }
-                                    }
-                                }
-                        }
                         .help(help)
+                        .popover(isPresented: $showHelp, arrowEdge: .bottom) {
+                            TeachingTipView(tip: TeachingTip(
+                                title: title ?? "使用说明",
+                                intro: help,
+                                steps: helpSteps,
+                                footnote: helpFootnote
+                            ))
+                        }
                         .onChange(of: showHelp) { _, shown in
-                            // 打开 8 秒后自动消失（事件任务，非 Timer）
+                            // 打开 12 秒后自动消失（事件任务，非 Timer）
                             helpDismissTask?.cancel()
                             if shown {
                                 helpDismissTask = Task { @MainActor in
-                                    try? await Task.sleep(for: .seconds(8))
+                                    try? await Task.sleep(for: .seconds(12))
                                     if !Task.isCancelled { showHelp = false }
                                 }
                             }

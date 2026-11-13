@@ -180,7 +180,9 @@ struct CommitView: View {
 
     private var fileList: some View {
         GlassCard(title: "代码变更", icon: "doc.on.doc",
-                  help: "点击文件名在右侧查看差异；悬停文件行可直接暂存 / 丢弃；右上可切换列表 / 目录树视图。") {
+                  help: "勾选 → 暂存 → 写说明 → 提交。点文件名全屏看差异；悬停文件行快速暂存 / 丢弃。",
+                  helpSteps: Teachings.commitFiles.steps,
+                  helpFootnote: Teachings.commitFiles.footnote) {
             VStack(alignment: .leading, spacing: 12) {
                 if !state.status.isClean {
                     HStack(spacing: 8) {
@@ -401,6 +403,8 @@ struct CommitView: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                HelpQuestionButton(tip: Teachings.commitDiff, arrowEdge: .bottom)
 
                 Spacer(minLength: 0)
             }
