@@ -98,6 +98,15 @@ struct RootView: View {
         .overlay(alignment: .bottom) {
             NoticeBanner().padding(.bottom, 22)
         }
+        .sheet(isPresented: Binding(
+            get: { state.showBranchPickerSheet },
+            set: { state.showBranchPickerSheet = $0 }
+        )) {
+            // 顶栏「仓库 · 分支」胶囊的分支选择器。
+            // 此前只置位了状态、没挂 sheet，点了永远不弹（截图反馈的 bug）。
+            BranchPickerSheet()
+                .environment(state)
+        }
         .sheet(isPresented: $showNewBranch) {
             TextInputSheet(
                 title: "新建分支",
