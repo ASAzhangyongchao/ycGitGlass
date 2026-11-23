@@ -38,76 +38,46 @@ struct RootView: View {
         .frame(minWidth: 980, minHeight: 640)
         // 系统标题栏：左侧品牌 + 仓库/分支胶囊（点击开分支选择器）
         .toolbar {
-            ToolbarItem(placement: .automatic) {
-                // 单一 Button（不再用 if/else 包一层条件视图）：条件视图会让
-                // toolbar 每次状态变化都重建 item，偶发吞掉点击。没选仓库时用
-                // 透明 + 禁用呈现同样效果。
-                Button {
-                    openBranchPicker()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "folder.fill").font(.system(size: 9))
-                        Text(state.currentRepository?.name ?? "")
-                            .font(.system(size: 11, weight: .medium))
-                        Text("·").font(.system(size: 10)).foregroundStyle(.tertiary)
-                        Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
-                        Text(state.status.branch.isEmpty ? "—" : state.status.branch)
-                            .font(.system(size: 11, design: .monospaced))
-                        if state.status.ahead + state.status.behind > 0 {
-                            Text("↑\(state.status.ahead) ↓\(state.status.behind)")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(GlassPalette.mint)
-                        }
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.tertiary)
+            ToolbarItem(placement: .primaryAction) {
+                // 胶囊 + 工具按钮收进同一个 toolbar item 的 HStack 里。
+                // macOS 会按自己的规则给 group 内 item 排序（实测把自定义视图
+                // 甩到最右、贴住窗口边缘，左右内边距一起消失），合成一个 item
+                // 之后顺序、项间距、与窗口右缘的距离全部由这里控制。
+                HStack(spacing: 7) {
+                    branchCapsule
+
+                    if state.isBusy {
+                        BusyBadge(label: state.busyLabel)
                     }
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.primary.opacity(hoveringCapsule ? 0.13 : 0.06), in: Capsule())
-                    // 显式命中形状：胶囊内边距也算点击热区，避免点在文字空隙无反应
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .onHover { hoveringCapsule = $0 }
-                .disabled(state.currentRepository == nil)
-                .opacity(state.currentRepository == nil ? 0 : 1)
-                .help("点击（或菜单 Git ▸ 切换分支… ⌘⇧B）打开分支选择器：搜索、本地/远程、按来源折叠")
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                if state.isBusy {
-                    BusyBadge(label: state.busyLabel)
-                }
-                ToolbarIconButton(icon: "arrow.down", label: "拉取",
-                                  help: "拉取远程改动（fast-forward）") {
-                    Task { await state.pull() }
-                }
-                .disabled(state.currentRepository == nil || state.isBusy)
+                    ToolbarIconButton(icon: "arrow.down", label: "拉取",
+                                      help: "拉取远程改动（fast-forward）") {
+                        Task { await state.pull() }
+                    }
+                    .disabled(state.currentRepository == nil || state.isBusy)
 
-                ToolbarIconButton(icon: "arrow.up", label: "推送",
-                                  help: "推送到远程；首次自动建立上游") {
-                    Task { await state.push() }
-                }
-                .disabled(state.currentRepository == nil || state.isBusy)
+                    ToolbarIconButton(icon: "arrow.up", label: "推送",
+                                      help: "推送到远程；首次自动建立上游") {
+                        Task { await state.push() }
+                    }
+                    .disabled(state.currentRepository == nil || state.isBusy)
 
-                ToolbarIconButton(icon: "arrow.clockwise", label: "刷新",
-                                  help: "手动刷新（⌘R）") {
-                    Task { await state.refresh(reason: .manual) }
-                }
-                .disabled(state.isBusy)
+                    ToolbarIconButton(icon: "arrow.clockwise", label: "刷新",
+                                      help: "手动刷新（⌘R）") {
+                        Task { await state.refresh(reason: .manual) }
+                    }
+                    .disabled(state.isBusy)
 
-                ToolbarIconButton(icon: "clock.arrow.circlepath", label: "历史",
-                                  help: "查看刷新历史") {
-                    state.showRefreshHistoryPopoverNow()
-                }
+                    ToolbarIconButton(icon: "clock.arrow.circlepath", label: "历史",
+                                      help: "查看刷新历史") {
+                        state.showRefreshHistoryPopoverNow()
+                    }
 
-                ToolbarIconButton(icon: "info.circle", label: "关于",
-                                  help: "关于 码牛 MooGit · 版本 · 检查更新") {
-                    state.openAbout()
+                    ToolbarIconButton(icon: "info.circle", label: "关于",
+                                      help: "关于 码牛 MooGit · 版本 · 检查更新") {
+                        state.openAbout()
+                    }
                 }
+                .padding(.trailing, 6)
             }
         }
         .overlay(alignment: .bottom) {
@@ -154,6 +124,44 @@ struct RootView: View {
             await state.refresh(reason: .appLaunch)
             await state.autoCheckForUpdatesIfNeeded()
         }
+    }
+
+    /// 顶栏「仓库 · 分支」胶囊：点击打开分支选择器。
+    private var branchCapsule: some View {
+        Button {
+            openBranchPicker()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "folder.fill").font(.system(size: 9))
+                Text(state.currentRepository?.name ?? "")
+                    .font(.system(size: 11, weight: .medium))
+                Text("·").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
+                Text(state.status.branch.isEmpty ? "—" : state.status.branch)
+                    .font(.system(size: 11, design: .monospaced))
+                if state.status.ahead + state.status.behind > 0 {
+                    Text("↑\(state.status.ahead) ↓\(state.status.behind)")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GlassPalette.mint)
+                }
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Color.primary.opacity(hoveringCapsule ? 0.13 : 0.06), in: Capsule())
+            // 显式命中形状：胶囊内边距也算点击热区，避免点在文字空隙无反应
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveringCapsule = $0 }
+        .disabled(state.currentRepository == nil)
+        .opacity(state.currentRepository == nil ? 0 : 1)
+        .help("点击（或菜单 Git ▸ 切换分支… ⌘⇧B）打开分支选择器：搜索、本地/远程、按来源折叠")
     }
 
     /// 打开分支选择器的唯一入口：顶栏胶囊、⌘⇧B、以及外部信号都走这里。
