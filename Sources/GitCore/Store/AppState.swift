@@ -62,6 +62,10 @@ public final class AppState {
     public var showRefreshHistoryPopover = false
     /// 分支选择器弹窗（顶部品牌行的仓库/分支胶囊触发）
     public var showBranchPickerSheet = false
+    /// 新建分支弹窗（菜单 / 胶囊右键 / 侧栏右键 / 历史详情共用的一次性信号）
+    public var showNewBranchSheet = false
+    /// 新建分支的起点：nil = 基于当前 HEAD；否则是提交号 / 分支名
+    public var newBranchStartPoint: String?
     /// 定位请求：详情面板「在列表中定位」按钮触发，历史列表滚动到该提交并闪烁高亮
     public var locateRequest: LocateRequest?
     public var updateState: UpdateState = .idle
@@ -456,7 +460,7 @@ public final class AppState {
         }
     }
 
-    public func createBranch(_ name: String) async {
+    public func createBranch(_ name: String, from startPoint: String? = nil) async {
         guard let path = currentPath else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -464,8 +468,10 @@ public final class AppState {
             return
         }
         await mutate("正在新建分支", reason: .branchSwitch) {
-            try await self.git.createBranch(trimmed, at: path)
-            return "已创建并切换到 \(trimmed)"
+            try await self.git.createBranch(trimmed, from: startPoint, at: path)
+            return startPoint == nil
+                ? "已创建并切换到 \(trimmed)"
+                : "已基于 \(startPoint ?? "") 创建并切换到 \(trimmed)"
         }
     }
 
@@ -1102,6 +1108,13 @@ public final class AppState {
 
     public func openAbout() {
         showAbout = true
+    }
+
+    /// 请求打开「新建分支」弹窗。所有入口（Git 菜单、胶囊右键、侧栏右键、
+    /// 历史详情的「从此提交新建分支」）都走这一个信号，由 RootView 转成本地 sheet。
+    public func requestNewBranch(from startPoint: String? = nil) {
+        newBranchStartPoint = startPoint
+        showNewBranchSheet = true
     }
 
     /// 手动检查更新（About 面板按钮触发）。

@@ -65,6 +65,14 @@ enum SnapshotMode {
             parents: [], subject: "提交主题 0", body: "", refs: "HEAD -> main",
             changedFiles: [], insertions: 10, deletions: 2, fileCount: 0)
 
+        // 新建分支弹窗的重名校验需要一份真实分支列表
+        state.branches = [
+            Branch(name: "main", isCurrent: true),
+            Branch(name: "dev"),
+            Branch(name: "feature/payment-refactor"),
+            Branch(name: "origin/main", isRemote: true)
+        ]
+
         _ = NSApplication.shared
         let content: AnyView = {
             switch page {
@@ -89,6 +97,30 @@ enum SnapshotMode {
                 """
                 print("SNAP diffFilePath=[\(state.diffFilePath)] diffText.len=\(state.diffText.count)")
                 return AnyView(CommitView().environment(state))
+            case "branchpicker":
+                // 分支选择器：验证底部「新建分支」按钮的可视性与展开后的内联输入
+                state.showNewBranchSheet = false
+                return AnyView(
+                    BranchPickerSheet()
+                        .environment(state)
+                        .padding(16)
+                        .background(GlassBackground())
+                )
+            case "newbranch", "newbranch-error", "newbranch-invalid", "newbranch-from":
+                // 新建分支弹窗的三种状态：空 / 重名报错 / 非法字符报错（+ 基于提交）
+                let initial: String
+                switch page {
+                case "newbranch-error": initial = "main"
+                case "newbranch-invalid": initial = "feature/bad name"
+                default: initial = ""
+                }
+                let start = page == "newbranch-from" ? "a1b2c3d4e5f6a7b8c9d0" : nil
+                return AnyView(
+                    NewBranchSheet(startPoint: start, initialName: initial)
+                        .environment(state)
+                        .padding(20)
+                        .background(GlassBackground())
+                )
             case "hunkonly":
                 // 直渲染 HunkDiffView：验证分块卡片的排版与按钮位置
                 state.diffFilePath = "Sources/App.swift"

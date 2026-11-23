@@ -267,6 +267,22 @@ open dist/码牛 MooGit.app</code></pre>
   <h3>提交详情面板</h3>
   <p>点列表任意一条，右侧滑出详情：完整提交号（可复制）、作者 / 提交者 / 时间 / 父提交 / 引用、文件数与增删行统计、说明正文、操作按钮、按目录折叠的变更文件树、逐文件 diff。</p>
 
+  <h3>新建分支</h3>
+  <p>四个入口，最终都到同一个弹窗：</p>
+  <table>
+    <tr><th>入口</th><th>怎么用</th></tr>
+    <tr><td>快捷键</td><td><span class="kbd">⌘⌥N</span></td></tr>
+    <tr><td>菜单</td><td><strong>Git ▸ 新建分支…</strong></td></tr>
+    <tr><td>顶栏胶囊右键</td><td>「仓库 · 分支」胶囊上右键 → 新建分支…</td></tr>
+    <tr><td>侧边栏仓库右键</td><td>仓库行右键 → 新建分支…（会先切到该仓库）</td></tr>
+  </table>
+  <p>分支选择器（<span class="kbd">⌘⇧B</span>）底部也有「＋ 新建分支」，就地展开一行输入框，输完回车即建即切，不用再开弹窗。</p>
+  <ul>
+    <li><strong>起点</strong>默认当前分支；从历史页详情点「基于此提交新建分支」时，起点是那条提交（卡片上显示短 hash），不是当前 HEAD</li>
+    <li>分支名支持 <code>feature/</code> <code>fix/</code> <code>hotfix/</code> <code>chore/</code> 前缀，点一下直接带入</li>
+    <li>实时校验：空格、<code>~ ^ : ? * [ \</code>、<code>..</code>、<code>@{</code>、<code>/</code> 开头结尾或连续、以 <code>.</code> / <code>.lock</code> 结尾、与已有<strong>本地</strong>分支重名 —— 命中就在输入框下方红字提示，且「创建并切换」置灰</li>
+    <li>创建成功后自动切到新分支并刷新一次</li>
+  </ul>
   <h3>本地合并（双向）与删除分支</h3>
   <p>点顶栏右上角的「仓库 · 分支」胶囊打开分支选择器（备用入口：菜单 <strong>Git ▸ 切换分支…</strong>，快捷键 ⌘⇧B），每个非当前分支行右侧的合并图标菜单可：</p>
   <ul>
@@ -367,6 +383,7 @@ open dist/码牛 MooGit.app</code></pre>
   <table>
     <tr><th>快捷键</th><th>功能</th><th>快捷键</th><th>功能</th></tr>
     <tr><td><span class="kbd">⌘⇧B</span></td><td>打开分支选择器</td><td><span class="kbd">⌘⇧F</span></td><td>抓取全部远程（含 prune）</td></tr>
+    <tr><td><span class="kbd">⌘⌥N</span></td><td>新建分支</td><td></td><td></td></tr>
     <tr><td><span class="kbd">⌘R</span></td><td>手动刷新</td><td><span class="kbd">⌘3</span></td><td>历史</td></tr>
     <tr><td><span class="kbd">⌘L</span></td><td>拉取</td><td><span class="kbd">⌘4</span></td><td>储藏 / 标签</td></tr>
     <tr><td><span class="kbd">⇧⌘P</span></td><td>推送</td><td><span class="kbd">⌘5</span></td><td>远程源</td></tr>

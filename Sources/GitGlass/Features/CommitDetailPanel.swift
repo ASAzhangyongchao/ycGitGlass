@@ -233,6 +233,32 @@ struct CommitDetailPanel: View {
                     }
                 }
             }
+
+            // SourceTree 的「从这次提交新建分支」：起点用选中提交的 hash，
+            // 不依赖当前 HEAD，适合从历史里拉一条修 bug 的分支出来。
+            Button {
+                if let hash = state.selectedCommit?.hash {
+                    state.requestNewBranch(from: hash)
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 10, weight: .medium))
+                    Text("基于此提交新建分支")
+                        .font(.system(size: 10, weight: .medium))
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundStyle(GlassPalette.blue)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(GlassPalette.blue.opacity(0.09),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(state.selectedCommit == nil)
+            .help("从这条提交切出新分支（不是基于当前 HEAD）")
         }
         .disabled(state.isBusy)
     }

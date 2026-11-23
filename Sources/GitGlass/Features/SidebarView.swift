@@ -308,6 +308,12 @@ struct SidebarView: View {
                       systemImage: state.isPinned(repository.id) ? "pin.slash" : "pin")
             }
             Divider()
+            Button("新建分支…") {
+                // 右键的仓库可能不是当前选中：先切过去（selectedRepoID 同步生效，
+                // currentPath 立即指向新仓库），再弹窗，避免建到别的仓库上。
+                state.selectRepository(repository.id)
+                state.requestNewBranch()
+            }
             Button("在 Finder 中显示") {
                 NSWorkspace.shared.selectFile(repository.path, inFileViewerRootedAtPath: "")
             }

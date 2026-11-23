@@ -405,14 +405,22 @@ struct BranchPickerSheet: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
+            // 以前是一行小蓝字，藏在面板左下角几乎看不见，用户找「新建分支」
+            // 完全找不到入口。改成有底的胶囊按钮，同时保留内联输入行（更快）。
             Button {
-                withComfortableAnimation(reduceMotion) { showNewBranch = true }
+                withComfortableAnimation(reduceMotion) { showNewBranch.toggle() }
             } label: {
-                Label("新建分支…", systemImage: "plus")
-                    .font(.system(size: 11.5, weight: .medium))
+                Label(showNewBranch ? "收起新建" : "新建分支",
+                      systemImage: showNewBranch ? "chevron.up.circle.fill" : "plus.circle.fill")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
             }
             .buttonStyle(.plain)
             .foregroundStyle(GlassPalette.blue)
+            .background(GlassPalette.blue.opacity(0.13), in: Capsule())
+            .overlay { Capsule().strokeBorder(GlassPalette.blue.opacity(0.28), lineWidth: 0.8) }
+            .help("从当前分支切出新分支；也可用菜单 Git ▸ 新建分支… 打开独立弹窗")
             Spacer()
             Text("提示：切远程分支会自动建立本地跟踪")
                 .font(.system(size: 9.5))
@@ -425,29 +433,45 @@ struct BranchPickerSheet: View {
 
     /// 内联新建分支：不再走"先关面板再弹 sheet"（那条链早就断了），
     /// 直接在面板底部展开一行输入，创建成功后关面板。
+    /// 内联输入与独立弹窗共用同一套校验规则，避免两处行为不一致。
+    private var inlineValidation: String? {
+        BranchNameValidator.error(
+            newBranchName,
+            existing: state.branches.filter { !$0.isRemote }.map(\.name)
+        )
+    }
+
     private var newBranchRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "plus.circle")
-                .font(.system(size: 11))
-                .foregroundStyle(GlassPalette.blue)
-            TextField("新分支名，例如 feature/login", text: $newBranchName)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .onSubmit { createNewBranch() }
-            Button("创建") { createNewBranch() }
-                .buttonStyle(.borderless)
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(GlassPalette.blue)
-                .disabled(newBranchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button("取消") {
-                withComfortableAnimation(reduceMotion) {
-                    showNewBranch = false
-                    newBranchName = ""
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(GlassPalette.blue)
+                TextField("新分支名，例如 feature/login", text: $newBranchName)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .onSubmit { createNewBranch() }
+                Button("创建") { createNewBranch() }
+                    .buttonStyle(.borderless)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(GlassPalette.blue)
+                    .disabled(newBranchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || inlineValidation != nil)
+                Button("取消") {
+                    withComfortableAnimation(reduceMotion) {
+                        showNewBranch = false
+                        newBranchName = ""
+                    }
                 }
+                .buttonStyle(.borderless)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
             }
-            .buttonStyle(.borderless)
-            .font(.system(size: 11.5))
-            .foregroundStyle(.secondary)
+            if let inlineValidation {
+                Label(inlineValidation, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(GlassPalette.rose)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -456,7 +480,7 @@ struct BranchPickerSheet: View {
 
     private func createNewBranch() {
         let name = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
+        guard !name.isEmpty, inlineValidation == nil else { return }
         Task {
             await state.createBranch(name)
             newBranchName = ""

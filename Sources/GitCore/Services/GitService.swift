@@ -190,8 +190,18 @@ public struct GitService: Sendable {
         _ = try await run(path, args)
     }
 
-    public func createBranch(_ name: String, at path: String) async throws {
-        try await checkout(name, at: path, create: true)
+    /// 新建并切换分支。`startPoint` 为空时基于当前 HEAD，否则基于指定提交 / 分支
+    /// （历史页「从此提交新建分支」用）。走 `git checkout -b <name> [startPoint]`，
+    /// 不复用 checkout(name,create:) 是因为它只处理「切远程分支自动建跟踪」那条路径。
+    public func createBranch(_ name: String, from startPoint: String? = nil,
+                             at path: String) async throws {
+        guard Self.isValidRefName(name) else { throw AppError.invalidInput("分支名不合法") }
+        var args = ["checkout", "-b", name]
+        if let start = startPoint?.trimmingCharacters(in: .whitespacesAndNewlines), !start.isEmpty {
+            guard Self.isValidRefToken(start) else { throw AppError.invalidInput("起点不合法") }
+            args.append(start)
+        }
+        _ = try await run(path, args)
     }
 
     // MARK: - 暂存与提交
@@ -717,5 +727,11 @@ public struct GitService: Sendable {
     private static func isValidRefName(_ name: String) -> Bool {
         guard !name.isEmpty, name.count <= 128, !name.hasPrefix("-"), !name.contains(" ") else { return false }
         return true
+    }
+
+    /// 起点（commit hash / 分支名）只允许安全字符，避免拼进 argv 的参数被当成选项。
+    private static func isValidRefToken(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 128, !value.hasPrefix("-") else { return false }
+        return value.allSatisfy { $0.isLetter || $0.isNumber || "_.-/".contains($0) }
     }
 }

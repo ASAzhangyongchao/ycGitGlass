@@ -6,10 +6,18 @@ import GitCore
 /// macOS 上同一视图链挂多个 `.sheet` 时，呈现请求会互相竞争（系统只维护
 /// 一个 window-modal presenter），实测容易出现「状态改了、面板不弹」。
 /// 所有窗口级弹窗因此收口成一个 `.sheet(item:)`，谁来都只走这一扇门。
-private enum RootSheet: String, Identifiable {
+private enum RootSheet: Identifiable {
     case branchPicker
     case about
-    var id: String { rawValue }
+    case newBranch(startPoint: String?)
+
+    var id: String {
+        switch self {
+        case .branchPicker: return "branchPicker"
+        case .about: return "about"
+        case .newBranch(let start): return "newBranch-\(start ?? "HEAD")"
+        }
+    }
 }
 
 struct RootView: View {
@@ -97,6 +105,9 @@ struct RootView: View {
                     .environment(state)
             case .about:
                 AboutSheet()
+            case .newBranch(let startPoint):
+                NewBranchSheet(startPoint: startPoint)
+                    .environment(state)
             }
         }
         // AppState 里的两个「请求打开」信号当作一次性事件：
@@ -111,6 +122,11 @@ struct RootView: View {
             guard open else { return }
             state.showAbout = false
             activeSheet = .about
+        }
+        .onChange(of: state.showNewBranchSheet) { _, open in
+            guard open else { return }
+            state.showNewBranchSheet = false
+            activeSheet = .newBranch(startPoint: state.newBranchStartPoint)
         }
         .alert("刷新历史", isPresented: Binding(
             get: { state.showRefreshHistoryPopover },
@@ -172,7 +188,17 @@ struct RootView: View {
         .onHover { hoveringCapsule = $0 }
         .disabled(state.currentRepository == nil)
         .opacity(state.currentRepository == nil ? 0 : 1)
-        .help("点击（或菜单 Git ▸ 切换分支… ⌘⇧B）打开分支选择器：搜索、本地/远程、按来源折叠")
+        .help("点击打开分支选择器（⌘⇧B）；右键可新建分支（⌘⌥N）")
+        .contextMenu {
+            Button("切换分支…") { openBranchPicker() }
+            Button("新建分支…") { state.requestNewBranch() }
+            Divider()
+            Button("复制当前分支名") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(state.status.branch, forType: .string)
+            }
+            .disabled(state.status.branch.isEmpty)
+        }
     }
 
     /// 打开分支选择器的唯一入口：顶栏胶囊、⌘⇧B、以及外部信号都走这里。
