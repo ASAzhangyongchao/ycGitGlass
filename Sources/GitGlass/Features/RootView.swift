@@ -43,7 +43,7 @@ struct RootView: View {
                 // macOS 会按自己的规则给 group 内 item 排序（实测把自定义视图
                 // 甩到最右、贴住窗口边缘，左右内边距一起消失），合成一个 item
                 // 之后顺序、项间距、与窗口右缘的距离全部由这里控制。
-                HStack(spacing: 7) {
+                HStack(spacing: 8) {
                     branchCapsule
 
                     if state.isBusy {
@@ -77,8 +77,13 @@ struct RootView: View {
                         state.openAbout()
                     }
                 }
-                .padding(.trailing, 6)
+                .padding(.trailing, 16)
             }
+            // macOS 26 会给同一 ToolbarItem 内的内容套一层共享圆角底色，
+            // 这层容器右边界被系统钉在窗口右缘内侧约 3px 处——外面再加多少
+            // padding 都会被它吞掉（实测 6 / 12 / 40 三个值，容器位置一动不动）。
+            // 关掉共享背景，胶囊与图标按自己的布局落位，右侧留白才真正可控。
+            .sharedBackgroundVisibility(.hidden)
         }
         .overlay(alignment: .bottom) {
             NoticeBanner().padding(.bottom, 22)
@@ -151,9 +156,15 @@ struct RootView: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .truncationMode(.middle)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Color.primary.opacity(hoveringCapsule ? 0.13 : 0.06), in: Capsule())
+            // 左右各 14pt：胶囊底色在深色玻璃上很淡，内边距给足才看得出
+            // "字在胶囊里"而不是"字直接浮着、跟旁边的图标贴一起"。
+            .padding(.horizontal, 14)
+            .padding(.vertical, 5)
+            .background(Color.primary.opacity(hoveringCapsule ? 0.16 : 0.09), in: Capsule())
+            .overlay {
+                // 一层极细描边把胶囊轮廓勾出来，纯填充在深底上边界会糊掉
+                Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.8)
+            }
             // 显式命中形状：胶囊内边距也算点击热区，避免点在文字空隙无反应
             .contentShape(Capsule())
         }
