@@ -158,6 +158,14 @@ enum SnapshotMode {
                     HeightProbe(label: "normal") { MascotCow(isBusy: false) }
                     HeightProbe(label: "angry") { MascotCow(isBusy: false, initiallyAngry: true) }
                 }.padding(40))
+            case "about":
+                // 关于面板：验证卡片内边距（内容不贴玻璃背景边缘）
+                return AnyView(
+                    AboutSheet()
+                        .environment(state)
+                        .padding(16)
+                        .background(GlassBackground())
+                )
             case "teaching":
                 // 教学弹层直渲染：验证 TeachingTipView 内容完整性
                 return AnyView(HStack(spacing: 20) {
@@ -169,9 +177,18 @@ enum SnapshotMode {
         }()
         let host = NSHostingView(rootView: content)
         host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        // macOS 26 的玻璃 / 材质效果只在真实窗口里绘制：先挂到离屏窗口再截图，
+        // 否则 cacheDisplay 得到的是全透明空图。
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+        window.orderFrontRegardless()
         host.layoutSubtreeIfNeeded()
         host.layoutSubtreeIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+        host.layoutSubtreeIfNeeded()
 
         guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return true }
         host.cacheDisplay(in: host.bounds, to: bitmap)

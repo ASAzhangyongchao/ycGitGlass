@@ -64,7 +64,9 @@ struct AboutSheet: View {
             }
             .padding(.bottom, 22)
         }
-        .frame(width: 430, height: 560)
+        // 与其它弹窗（20 / 24）对齐：卡片内容不再贴着玻璃背景边缘
+        .padding(.horizontal, 20)
+        .frame(width: 470, height: 510)
         .background(GlassBackground())
     }
 
