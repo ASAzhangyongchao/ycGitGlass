@@ -14,10 +14,11 @@ public struct GitService: Sendable {
     // MARK: - 基础执行
 
     private func run(_ path: String, _ args: [String], timeout: TimeInterval = 20,
+                     stdin: String? = nil,
                      unchecked: Bool = false) async throws -> CommandResult {
         let full = ["-C", path] + args
         AppLogger.info(AppLogger.git, "git.run", detail: ["subcommand": args.first ?? ""])
-        let result = try await runner.run(executable: git, arguments: full, timeout: timeout)
+        let result = try await runner.run(executable: git, arguments: full, stdin: stdin, timeout: timeout)
         if !unchecked && result.exitCode != 0 {
             if result.wasTerminated { throw AppError.timeout("git " + args.joined(separator: " ")) }
             let message = result.stderr.isEmpty ? result.stdout : result.stderr
@@ -269,6 +270,18 @@ public struct GitService: Sendable {
         _ = try await run(path, ["pull", "--ff-only"], timeout: 90)
     }
 
+    /// 抓取全部远程并清理已删除的远程分支引用（SourceTree 的 Fetch All + Prune）。
+    public func fetchAll(at path: String, prune: Bool = true) async throws {
+        var args = ["fetch", "--all", "--tags"]
+        if prune { args.append("--prune") }
+        _ = try await run(path, args, timeout: 180)
+    }
+
+    /// 把当前分支重置到某个提交：soft 只挪指针，mixed 顺带清索引，hard 连工作区一起丢。
+    public func reset(to hash: String, mode: String, at path: String) async throws {
+        _ = try await run(path, ["reset", "--\(mode)", hash])
+    }
+
     public func fetch(at path: String, remote: String = "") async throws {
         var args = ["fetch", "--prune"]
         if !remote.isEmpty { args.append(remote) }
@@ -320,6 +333,24 @@ public struct GitService: Sendable {
         }
         let result = try await run(path, ["-c", "core.quotePath=false", "show", "--pretty=format:", "--name-only", hash])
         return result.stdout.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
+    }
+
+    /// 原始 unified diff（不做未跟踪文件回退）——按块暂存必须拿到真正的 patch 结构。
+    public func rawDiff(for filePath: String, staged: Bool, at path: String) async throws -> String {
+        var args = ["-c", "core.quotePath=false", "diff", "--no-color", "--no-ext-diff"]
+        if staged { args.append("--cached") }
+        args += ["--", filePath]
+        return try await run(path, args).stdout
+    }
+
+    /// 把补丁喂给 `git apply`：cached = 作用于索引区；reverse = 反向应用（取消暂存）。
+    /// 走 stdin 而不是临时文件，避免路径空格 / 并发写临时目录的坑。
+    public func applyPatch(_ patch: String, cached: Bool, reverse: Bool, at path: String) async throws {
+        var args = ["apply", "--whitespace=nowarn"]
+        if cached { args.append("--cached") }
+        if reverse { args.append("--reverse") }
+        args.append("-")
+        _ = try await run(path, args, stdin: patch)
     }
 
     /// 未跟踪文件没有 diff，回退为读取文本内容（限制 256KB，二进制跳过）。

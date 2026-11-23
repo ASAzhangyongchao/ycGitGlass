@@ -212,6 +212,18 @@ enum Teachings {
         footnote: "标签管理也在本页下方：轻量标签当书签，附注标签可写说明。"
     )
 
+    /// 侧边栏「常用」置顶
+    static let sidebarPins = TeachingTip(
+        title: "常用仓库怎么置顶",
+        intro: "仓库多了以后，把天天要切的那几个钉在顶部，其余的自动收起来，不再翻半天列表。",
+        steps: [
+            .init("pin", "设为常用", "鼠标移到仓库行 → 右侧浮出图钉，点一下即置顶；或在行上右键选「设为常用」。"),
+            .init("pin.fill", "取消常用", "再点一次图钉（或右键「取消常用」）就退回普通列表。"),
+            .init("chevron.up", "自动折叠", "一旦有了常用，非常用区只平铺放得下的几个，剩下的折成「还有 N 个 · 展开」。当前选中的仓库永远不会被折进去。"),
+        ],
+        footnote: "置顶信息只记在本机（UserDefaults），不写进仓库配置，拷走仓库不受影响。"
+    )
+
     /// 远程源页
     static let remotes = TeachingTip(
         title: "远程源是什么",

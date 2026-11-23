@@ -7,12 +7,18 @@ struct CommitDetailPanel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showCherryPickConfirm = false
     @State private var showRevertConfirm = false
+    @State private var showResetConfirm = false
     @State private var showTagSheet = false
     @State private var showGraphPopover = false
     @State private var tagName = ""
     /// true=独立面板模式（自带玻璃外壳/阴影/关闭钮）；false=嵌入 InspectorPanel 模式
     /// （外壳和关闭由容器统一提供，这里只出内容）。
     var showsOwnChrome: Bool = true
+
+    private func doReset(_ mode: AppState.ResetMode) {
+        guard let commit = state.selectedCommit else { return }
+        Task { await state.resetTo(commit, mode: mode) }
+    }
 
     var body: some View {
         ScrollView {
@@ -63,6 +69,18 @@ struct CommitDetailPanel: View {
             }
         } message: {
             Text("会把这条提交的改动复制成一条新提交，原提交保持不变。若内容冲突，可到「储藏」页一键中止。")
+        }
+        .confirmationDialog(
+            "把当前分支重置到 \(state.selectedCommit?.shortHash ?? "")？",
+            isPresented: $showResetConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Soft · 改动留在暂存区", role: .destructive) { doReset(.soft) }
+            Button("Mixed · 改动留在工作区", role: .destructive) { doReset(.mixed) }
+            Button("Hard · 丢弃全部改动", role: .destructive) { doReset(.hard) }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只影响本地当前分支的指针。已推送的提交重置后，要 force push 才能让远端跟上；Hard 会永久丢弃这些改动。")
         }
         .alert("生成反向提交？", isPresented: $showRevertConfirm) {
             Button("取消", role: .cancel) {}
@@ -200,6 +218,11 @@ struct CommitDetailPanel: View {
                     state.locateSelectedInList()
                 }
                 .help("在左侧列表中定位这条提交：滚动过去并高亮闪烁")
+
+                smallActionButton("重置", icon: "arrow.uturn.left.circle", tint: GlassPalette.amber) {
+                    showResetConfirm = true
+                }
+                .help("把当前分支重置到这条提交：soft / mixed / hard 三种力度")
 
                 smallActionButton("打标签", icon: "tag", tint: nil) { showTagSheet = true }
 

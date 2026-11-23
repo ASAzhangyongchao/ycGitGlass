@@ -30,6 +30,12 @@ struct DiffViewerPanel: View {
         source == .history ? state.detailDiff : state.diffText
     }
 
+    /// 当前 diff 对应的文件状态（决定分块按钮是「暂存」还是「取消暂存」）。
+    private var activeFileChange: FileChange? {
+        guard source == .commit, !state.diffFilePath.isEmpty else { return nil }
+        return state.status.files.first { $0.path == state.diffFilePath }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -104,8 +110,12 @@ struct DiffViewerPanel: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(20)
+        } else if source == .commit {
+            // 提交页：按 hunk 分块渲染，每块可单独暂存 / 取消暂存
+            HunkDiffView(text: activeText, file: activeFileChange)
+                .padding(10)
         } else {
-            // 文本 diff：铺满整个面板
+            // 历史页：只读 diff
             DiffTextView(text: activeText)
                 .padding(10)
         }

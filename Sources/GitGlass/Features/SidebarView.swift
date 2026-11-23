@@ -7,6 +7,8 @@ struct SidebarView: View {
     @State private var showCloneSheet = false
     @State private var query = ""
     @State private var showBranchPickerFor: Repository?
+    @State private var showAllRepos = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
 
     private var searchResults: [(repository: Repository, matchedBranches: [String])] {
@@ -82,6 +84,7 @@ struct SidebarView: View {
                 .foregroundStyle(GlassPalette.accent)
             Text("仓库")
                 .font(.system(size: 13, weight: .semibold))
+            HelpQuestionButton(tip: Teachings.sidebarPins, arrowEdge: .bottom)
             Spacer()
             Text("\(state.repositories.count)")
                 .font(.system(size: 11, design: .monospaced))
@@ -93,56 +96,156 @@ struct SidebarView: View {
     @ViewBuilder
     private var repositoryList: some View {
         if state.repositories.isEmpty {
-            VStack(spacing: 12) {
-                Image(systemName: "folder.badge.plus")
-                    .font(.system(size: 30, weight: .light))
-                    .foregroundStyle(GlassPalette.accent.opacity(0.8))
-                Text("还没有仓库")
-                    .font(.system(size: 13, weight: .semibold))
-                Text("点下面的「添加仓库」，选择一个本地 Git 文件夹就能开始。")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity, minHeight: 170)
-            .padding(12)
-            .glassSurface(cornerRadius: 16, tint: GlassPalette.blue.opacity(0.08))
-            .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            emptyRepositoryHint
         } else if isSearching && searchResults.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 22, weight: .light))
-                    .foregroundStyle(.tertiary)
-                Text("没有匹配「\(query)」的仓库或分支")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 120)
-            .padding(12)
+            noSearchResultHint
         } else {
-            List(selection: Binding(
-                get: { state.selectedRepoID },
-                set: { newValue in if let newValue { state.selectRepository(newValue) } }
-            )) {
+            GeometryReader { proxy in
+                repositoryListContent(availableHeight: proxy.size.height)
+            }
+            .frame(minHeight: 140)
+        }
+    }
+
+    /// 侧栏列表：常用置顶 → 其余仓库。非常用按可用高度自动折叠，
+    /// 折叠永远不会藏掉当前选中的仓库。
+    private func repositoryListContent(availableHeight: CGFloat) -> some View {
+        let pinned = state.pinnedRepositories
+        let others = state.unpinnedRepositories
+        let limit = collapsedLimit(for: availableHeight)
+        let visibleOthers = visibleUnpinned(others, limit: limit)
+        // 一个「常用」都没有时不折叠：保持原来「全量列表 + 滚动」的体验，
+        // 只有用户真的开始置顶，才把非常用收起来给常用让位置。
+        let collapsible = !state.pinnedRepoIDs.isEmpty && others.count > limit
+
+        return List(selection: Binding(
+            get: { state.selectedRepoID },
+            set: { newValue in if let newValue { state.selectRepository(newValue) } }
+        )) {
+            if isSearching {
                 ForEach(Array(searchResults.enumerated()), id: \.element.repository.id) { index, result in
                     repositoryRow(result.repository, matchedBranches: result.matchedBranches)
                         .staggered(index)
-                        .contextMenu {
-                            Button("在 Finder 中显示") {
-                                NSWorkspace.shared.selectFile(result.repository.path, inFileViewerRootedAtPath: "")
-                            }
-                            Divider()
-                            Button("从列表移除", role: .destructive) {
-                                withAnimation(Motion.spring) { state.removeRepository(result.repository.id) }
-                            }
+                }
+            } else {
+                if !pinned.isEmpty {
+                    Section {
+                        ForEach(Array(pinned.enumerated()), id: \.element.id) { index, repository in
+                            repositoryRow(repository, matchedBranches: [])
+                                .staggered(index)
                         }
+                    } header: {
+                        sectionHeader("常用", icon: "pin.fill", tint: GlassPalette.amber, count: pinned.count)
+                    }
+                }
+                Section {
+                    ForEach(Array(visibleOthers.enumerated()), id: \.element.id) { index, repository in
+                        repositoryRow(repository, matchedBranches: [])
+                            .staggered(index)
+                    }
+                } header: {
+                    // 还没置顶任何常用时不显示分组标题：页面顶部已有「仓库 N」，
+                    // 再来一行标题只是重复占高度。
+                    if pinned.isEmpty {
+                        sectionHeader("仓库", icon: "folder", tint: GlassPalette.blue, count: others.count)
+                    } else {
+                        sectionHeader("其他仓库", icon: "folder",
+                                      tint: GlassPalette.blue, count: others.count,
+                                      expandState: collapsible
+                                        ? (remaining: max(0, others.count - visibleOthers.count),
+                                           expanded: showAllRepos)
+                                        : nil)
+                    }
                 }
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            .frame(minHeight: 140)
-            .animation(Motion.snappy, value: query)
         }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .animation(Motion.snappy, value: query)
+        .animation(Motion.snappy, value: showAllRepos)
+        .animation(Motion.snappy, value: state.pinnedRepoIDs)
+    }
+
+    private func sectionHeader(_ title: String, icon: String, tint: Color, count: Int,
+                               expandState: (remaining: Int, expanded: Bool)? = nil) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+            Text("\(count)")
+                .font(.system(size: 9.5, design: .monospaced))
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 4)
+            // 展开/收起放在分组标题行：永远可见，不跟内容一起滚到屏幕外
+            if let expandState {
+                Button {
+                    withComfortableAnimation(reduceMotion) { showAllRepos.toggle() }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(expandState.expanded ? "收起" : "还有 \(expandState.remaining) 个")
+                            .font(.system(size: 9.5, weight: .medium))
+                        Image(systemName: expandState.expanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .foregroundStyle(GlassPalette.blue)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(expandState.expanded ? "只显示常用 + 放得下的几个" : "展开其余 \(expandState.remaining) 个非常用仓库")
+            }
+        }
+    }
+
+    /// 按可用高度估算能平铺几个仓库（每行约 44pt，给分组标题留 70pt）。
+    private func collapsedLimit(for height: CGFloat) -> Int {
+        max(4, Int(max(0, height - 66) / 44))
+    }
+
+    /// 折叠时也不能把当前选中的仓库藏起来，否则"选中的东西"会从列表里消失。
+    private func visibleUnpinned(_ others: [Repository], limit: Int) -> [Repository] {
+        guard !showAllRepos, !state.pinnedRepoIDs.isEmpty else { return others }
+        var list = Array(others.prefix(limit))
+        if let selected = state.selectedRepoID,
+           others.contains(where: { $0.id == selected }),
+           !list.contains(where: { $0.id == selected }),
+           let repo = others.first(where: { $0.id == selected }) {
+            if list.count >= limit, !list.isEmpty { list.removeLast() }
+            list.append(repo)
+        }
+        return list
+    }
+
+    private var emptyRepositoryHint: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "folder.badge.plus")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(GlassPalette.accent.opacity(0.8))
+            Text("还没有仓库")
+                .font(.system(size: 13, weight: .semibold))
+            Text("点下面的「添加仓库」，选择一个本地 Git 文件夹就能开始。")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, minHeight: 170)
+        .padding(12)
+        .glassSurface(cornerRadius: 16, tint: GlassPalette.blue.opacity(0.08))
+        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+    }
+
+    private var noSearchResultHint: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(.tertiary)
+            Text("没有匹配「\(query)」的仓库或分支")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .padding(12)
     }
 
     private func repositoryRow(_ repository: Repository, matchedBranches: [String]) -> some View {
@@ -165,8 +268,6 @@ struct SidebarView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         ForEach(matchedBranches, id: \.self) { branch in
                             Button {
-                                // 先弹分支选择器再选仓库：sheet 挂在当前视图树，
-                                // 避免此前 0.15s 魔法延迟期间用户点到别处打开过期仓库的弹窗
                                 showBranchPickerFor = repository
                                 state.selectRepository(repository.id)
                             } label: {
@@ -190,10 +291,35 @@ struct SidebarView: View {
                 }
             }
             Spacer(minLength: 0)
+            if !isSearching {
+                PinToggleButton(pinned: state.isPinned(repository.id)) {
+                    withComfortableAnimation(reduceMotion) { state.togglePin(repository.id) }
+                }
+            }
         }
         .padding(.vertical, 4)
         .tag(repository.id)
         .help(repository.path)
+        .contextMenu {
+            Button {
+                withComfortableAnimation(reduceMotion) { state.togglePin(repository.id) }
+            } label: {
+                Label(state.isPinned(repository.id) ? "取消常用" : "设为常用（置顶到最上面）",
+                      systemImage: state.isPinned(repository.id) ? "pin.slash" : "pin")
+            }
+            Divider()
+            Button("在 Finder 中显示") {
+                NSWorkspace.shared.selectFile(repository.path, inFileViewerRootedAtPath: "")
+            }
+            Button("复制仓库路径") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(repository.path, forType: .string)
+            }
+            Divider()
+            Button("从列表移除", role: .destructive) {
+                withComfortableAnimation(reduceMotion) { state.removeRepository(repository.id) }
+            }
+        }
     }
 
     private var actionButtons: some View {
@@ -288,5 +414,29 @@ private struct CloneSheet: View {
         .padding(24)
         .frame(width: 460)
         .background(GlassBackground())
+    }
+}
+
+// MARK: - 行尾「常用」开关
+
+/// 悬停才现身的置顶按钮：已置顶时小铜针常显，未置顶时悬停浮出空心针。
+private struct PinToggleButton: View {
+    let pinned: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: pinned ? "pin.fill" : "pin")
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(pinned ? GlassPalette.amber : .secondary)
+                .frame(width: 20, height: 18)
+                .background(hovering ? Color.primary.opacity(0.09) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .opacity(pinned ? 1 : (hovering ? 1 : 0))
+        .onHover { hovering = $0 }
+        .help(pinned ? "取消常用（不再固定到顶部）" : "设为常用：固定到列表顶部")
     }
 }

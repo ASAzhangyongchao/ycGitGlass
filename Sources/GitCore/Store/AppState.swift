@@ -13,6 +13,9 @@ import Observation
 public final class AppState {
     // MARK: 持久化数据
     public var repositories: [Repository] = []
+    /// 侧栏「常用」仓库的 id（按置顶顺序）。只存 id、走 UserDefaults，
+    /// 不改 RepositoryStore 的仓库文件结构，老数据零迁移。
+    public var pinnedRepoIDs: [UUID] = []
     public var selectedRepoID: UUID?
     public var platforms: [GitPlatform] = AppConfig.defaultPlatforms
     public var keyPlatformBindings: [String: String] = [:]
@@ -181,6 +184,7 @@ public final class AppState {
     public init() {
         let persisted = store.load()
         repositories = persisted.repositories
+        pinnedRepoIDs = Self.loadPinnedIDs()
         platforms = persisted.platforms.isEmpty ? AppConfig.defaultPlatforms : persisted.platforms
         keyPlatformBindings = persisted.keyPlatformBindings
         onboardingSeen = persisted.onboardingSeen
@@ -325,6 +329,43 @@ public final class AppState {
     }
 
     // MARK: - 仓库维护
+    // MARK: - 常用（置顶）
+
+    private static let pinnedStorageKey = "sidebar.pinnedRepoIDs"
+
+    private static func loadPinnedIDs() -> [UUID] {
+        (UserDefaults.standard.stringArray(forKey: Self.pinnedStorageKey) ?? [])
+            .compactMap(UUID.init(uuidString:))
+    }
+
+    private func savePinnedIDs() {
+        UserDefaults.standard.set(pinnedRepoIDs.map(\.uuidString), forKey: Self.pinnedStorageKey)
+    }
+
+    public func isPinned(_ id: UUID) -> Bool { pinnedRepoIDs.contains(id) }
+
+    /// 置顶 / 取消置顶。新置顶排最前——刚设成常用就应该马上在顶上看到。
+    public func togglePin(_ id: UUID) {
+        if let index = pinnedRepoIDs.firstIndex(of: id) {
+            pinnedRepoIDs.remove(at: index)
+        } else {
+            pinnedRepoIDs.insert(id, at: 0)
+        }
+        savePinnedIDs()
+    }
+
+    /// 常用仓库，按置顶顺序。
+    public var pinnedRepositories: [Repository] {
+        pinnedRepoIDs.compactMap { id in repositories.first { $0.id == id } }
+    }
+
+    /// 非常用仓库：最近添加的排前面。
+    public var unpinnedRepositories: [Repository] {
+        repositories
+            .filter { !pinnedRepoIDs.contains($0.id) }
+            .sorted { $0.addedAt > $1.addedAt }
+    }
+
 
     public func selectRepository(_ id: UUID) {
         guard selectedRepoID != id else { return }
@@ -375,6 +416,10 @@ public final class AppState {
 
     public func removeRepository(_ id: UUID) {
         repositories.removeAll { $0.id == id }
+        if pinnedRepoIDs.contains(id) {
+            pinnedRepoIDs.removeAll { $0 == id }
+            savePinnedIDs()
+        }
         if selectedRepoID == id {
             selectedRepoID = repositories.first?.id
             resetSelections()
@@ -510,6 +555,73 @@ public final class AppState {
             await self.reloadDiffAfterMutation()
             return ""
         }
+    }
+
+    // MARK: - 重置 / 抓取全部
+
+    /// 重置模式（对应 git reset --soft / --mixed / --hard）。
+    public enum ResetMode: String, Sendable {
+        case soft, mixed, hard
+
+        public var summary: String {
+            switch self {
+            case .soft: return "只移动分支指针，改动留在暂存区"
+            case .mixed: return "移动分支并清空索引，改动留在工作区"
+            case .hard: return "移动分支并丢弃全部改动（不可恢复）"
+            }
+        }
+    }
+
+    public func resetTo(_ commit: Commit, mode: ResetMode) async {
+        guard let path = currentPath else { return }
+        await mutate("正在重置到 \(commit.shortHash)") {
+            try await self.git.reset(to: commit.hash, mode: mode.rawValue, at: path)
+            self.diffText = ""
+            return "已重置到 \(commit.shortHash)（--\(mode.rawValue)）"
+        }
+    }
+
+    public func fetchAll() async {
+        guard let path = currentPath else { return }
+        await mutate("正在抓取全部远程") {
+            try await self.git.fetchAll(at: path)
+            return "已抓取全部远程，并清理失效的远程分支"
+        }
+    }
+
+    // MARK: - 按块暂存（partial staging）
+
+    /// 暂存单个 hunk。只对已跟踪文件有效：未跟踪文件没有 diff 结构，
+    /// 只能整文件暂存（UI 里也不给这类文件显示分块按钮）。
+    public func stageHunk(_ hunk: DiffHunk, file: FileChange) async {
+        guard let path = currentPath, !file.isUntracked else { return }
+        await mutate("正在暂存这一块 \(file.fileName)") {
+            try await self.applyHunk(hunk, filePath: file.path, staged: false, reverse: false, at: path)
+            await self.reloadDiffAfterMutation()
+            return "已暂存 \(file.fileName) 的一个变更块"
+        }
+    }
+
+    /// 取消暂存单个 hunk（从索引区反向应用）。
+    public func unstageHunk(_ hunk: DiffHunk, file: FileChange) async {
+        guard let path = currentPath else { return }
+        await mutate("正在取消暂存这一块 \(file.fileName)") {
+            try await self.applyHunk(hunk, filePath: file.path, staged: true, reverse: true, at: path)
+            await self.reloadDiffAfterMutation()
+            return "已取消暂存 \(file.fileName) 的一个变更块"
+        }
+    }
+
+    /// 重新取一次 diff，按 header 定位同一块——避免 UI 拿着过期 hunk 直接 apply。
+    private func applyHunk(_ hunk: DiffHunk, filePath: String, staged: Bool,
+                           reverse: Bool, at path: String) async throws {
+        let diff = try await git.rawDiff(for: filePath, staged: staged, at: path)
+        let parsed = UnifiedDiff.parse(diff)
+        guard let target = parsed.hunks.first(where: { $0.header == hunk.header }) else {
+            throw AppError.invalidInput("这一块内容已经变化，请刷新后重试")
+        }
+        let patch = UnifiedDiff.patch(fileHeader: parsed.fileHeader, hunk: target)
+        try await git.applyPatch(patch, cached: true, reverse: reverse, at: path)
     }
 
     public func discardFile(_ file: FileChange) async {

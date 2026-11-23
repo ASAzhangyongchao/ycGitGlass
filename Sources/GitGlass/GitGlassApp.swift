@@ -33,6 +33,8 @@ struct GitGlassApp: App {
                     .keyboardShortcut("r", modifiers: [.command])
                 Button("检查更新…") { Task { await state.checkForUpdates() } }
                     .keyboardShortcut("u", modifiers: [.command])
+                Button("抓取全部远程（含 prune）") { Task { await state.fetchAll() } }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
                 Button("拉取") { Task { await state.pull() } }
                     .keyboardShortcut("l", modifiers: [.command])
                 Button("推送") { Task { await state.push() } }

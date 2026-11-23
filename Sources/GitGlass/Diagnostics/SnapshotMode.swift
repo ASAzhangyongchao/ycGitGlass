@@ -89,6 +89,37 @@ enum SnapshotMode {
                 """
                 print("SNAP diffFilePath=[\(state.diffFilePath)] diffText.len=\(state.diffText.count)")
                 return AnyView(CommitView().environment(state))
+            case "hunkonly":
+                // 直渲染 HunkDiffView：验证分块卡片的排版与按钮位置
+                state.diffFilePath = "Sources/App.swift"
+                let sample = """
+                diff --git a/Sources/App.swift b/Sources/App.swift
+                index 83db48f..777d10e 100644
+                --- a/Sources/App.swift
+                +++ b/Sources/App.swift
+                @@ -12,6 +12,7 @@ struct App {
+                     let store = Store()
+                     let cache = Cache()
+                -    var legacyFlag = true
+                +    var flag = true
+                +    var extra = false
+                     init() { configure() }
+                     func run() { loop() }
+                 }
+                @@ -40,3 +41,4 @@ extension App {
+                     func stop() {}
+                     func reset() {}
+                +    func ping() {}
+                 }
+                """
+                let fake = FileChange(path: "Sources/App.swift", indexStatus: " ", worktreeStatus: "M")
+                return AnyView(
+                    HunkDiffView(text: sample, file: fake)
+                        .environment(state)
+                        .frame(width: 520, height: 620)
+                        .padding(20)
+                        .background(GlassBackground())
+                )
             case "mascotcheck":
                 // 布局实测：量正常态与愤怒态的 MascotCow 实际高度，必须相等
                 return AnyView(VStack(spacing: 30) {
