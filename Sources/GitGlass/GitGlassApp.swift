@@ -27,6 +27,8 @@ struct GitGlassApp: App {
                 }
             }
             CommandMenu("Git") {
+                Button("切换分支…") { state.showBranchPickerSheet = true }
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
                 Button("手动刷新") { Task { await state.refresh(reason: .manual) } }
                     .keyboardShortcut("r", modifiers: [.command])
                 Button("检查更新…") { Task { await state.checkForUpdates() } }

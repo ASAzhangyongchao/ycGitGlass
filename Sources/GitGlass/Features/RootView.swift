@@ -1,12 +1,23 @@
 import SwiftUI
 import GitCore
 
+/// 窗口级弹窗的唯一槽位。
+///
+/// macOS 上同一视图链挂多个 `.sheet` 时，呈现请求会互相竞争（系统只维护
+/// 一个 window-modal presenter），实测容易出现「状态改了、面板不弹」。
+/// 所有窗口级弹窗因此收口成一个 `.sheet(item:)`，谁来都只走这一扇门。
+private enum RootSheet: String, Identifiable {
+    case branchPicker
+    case about
+    var id: String { rawValue }
+}
+
 struct RootView: View {
     @Environment(AppState.self) private var state
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var columnVisibility = NavigationSplitViewVisibility.all
-    @State private var newBranchName = ""
-    @State private var showNewBranch = false
+    @State private var activeSheet: RootSheet?
+    @State private var hoveringCapsule = false
     @Namespace private var tabIndicator
 
     var body: some View {
@@ -28,39 +39,43 @@ struct RootView: View {
         // 系统标题栏：左侧品牌 + 仓库/分支胶囊（点击开分支选择器）
         .toolbar {
             ToolbarItem(placement: .automatic) {
-                if state.currentRepository != nil {
-                    Button {
-                        state.showBranchPickerSheet = true
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "folder.fill").font(.system(size: 9))
-                            Text(state.currentRepository?.name ?? "")
-                                .font(.system(size: 11, weight: .medium))
-                            Text("·").font(.system(size: 10)).foregroundStyle(.tertiary)
-                            Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
-                            Text(state.status.branch.isEmpty ? "—" : state.status.branch)
-                                .font(.system(size: 11, design: .monospaced))
-                            if state.status.ahead + state.status.behind > 0 {
-                                Text("↑\(state.status.ahead) ↓\(state.status.behind)")
-                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(GlassPalette.mint)
-                            }
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(.tertiary)
+                // 单一 Button（不再用 if/else 包一层条件视图）：条件视图会让
+                // toolbar 每次状态变化都重建 item，偶发吞掉点击。没选仓库时用
+                // 透明 + 禁用呈现同样效果。
+                Button {
+                    openBranchPicker()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder.fill").font(.system(size: 9))
+                        Text(state.currentRepository?.name ?? "")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("·").font(.system(size: 10)).foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
+                        Text(state.status.branch.isEmpty ? "—" : state.status.branch)
+                            .font(.system(size: 11, design: .monospaced))
+                        if state.status.ahead + state.status.behind > 0 {
+                            Text("↑\(state.status.ahead) ↓\(state.status.behind)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(GlassPalette.mint)
                         }
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.primary.opacity(0.06), in: Capsule())
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.tertiary)
                     }
-                    .buttonStyle(.plain)
-                    .help("点击打开分支选择器：搜索、本地/远程、按来源折叠")
-                } else {
-                    EmptyView()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(hoveringCapsule ? 0.13 : 0.06), in: Capsule())
+                    // 显式命中形状：胶囊内边距也算点击热区，避免点在文字空隙无反应
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .onHover { hoveringCapsule = $0 }
+                .disabled(state.currentRepository == nil)
+                .opacity(state.currentRepository == nil ? 0 : 1)
+                .help("点击（或菜单 Git ▸ 切换分支… ⌘⇧B）打开分支选择器：搜索、本地/远程、按来源折叠")
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 if state.isBusy {
@@ -98,32 +113,29 @@ struct RootView: View {
         .overlay(alignment: .bottom) {
             NoticeBanner().padding(.bottom, 22)
         }
-        .sheet(isPresented: Binding(
-            get: { state.showBranchPickerSheet },
-            set: { state.showBranchPickerSheet = $0 }
-        )) {
-            // 顶栏「仓库 · 分支」胶囊的分支选择器。
-            // 此前只置位了状态、没挂 sheet，点了永远不弹（截图反馈的 bug）。
-            BranchPickerSheet()
-                .environment(state)
-        }
-        .sheet(isPresented: $showNewBranch) {
-            TextInputSheet(
-                title: "新建分支",
-                placeholder: "例如 feature/login",
-                confirmTitle: "创建并切换",
-                hint: "会从当前分支切出一个新分支，创建后自动刷新一次。",
-                text: $newBranchName
-            ) {
-                Task { await state.createBranch(newBranchName) }
-                newBranchName = ""
+        // 唯一弹窗出口：分支选择器 / 关于 都从这里出，避免多个 sheet
+        // 抢同一个 window-modal presenter。
+        .sheet(item: $activeSheet) { which in
+            switch which {
+            case .branchPicker:
+                BranchPickerSheet()
+                    .environment(state)
+            case .about:
+                AboutSheet()
             }
         }
-        .sheet(isPresented: Binding(
-            get: { state.showAbout },
-            set: { if !$0 { state.showAbout = false } }
-        )) {
-            AboutSheet()
+        // AppState 里的两个「请求打开」信号当作一次性事件：
+        // 收到即置回 false，并转成本地 activeSheet。
+        // 按钮 / 菜单 / 自动更新提示因此共用同一条呈现链路。
+        .onChange(of: state.showBranchPickerSheet) { _, open in
+            guard open else { return }
+            state.showBranchPickerSheet = false
+            openBranchPicker()
+        }
+        .onChange(of: state.showAbout) { _, open in
+            guard open else { return }
+            state.showAbout = false
+            activeSheet = .about
         }
         .alert("刷新历史", isPresented: Binding(
             get: { state.showRefreshHistoryPopover },
@@ -142,6 +154,12 @@ struct RootView: View {
             await state.refresh(reason: .appLaunch)
             await state.autoCheckForUpdatesIfNeeded()
         }
+    }
+
+    /// 打开分支选择器的唯一入口：顶栏胶囊、⌘⇧B、以及外部信号都走这里。
+    private func openBranchPicker() {
+        guard state.currentRepository != nil else { return }
+        activeSheet = .branchPicker
     }
 
     // MARK: 操作行（仓库/分支信息已并入品牌行，这里只留动作，不再重复两遍）

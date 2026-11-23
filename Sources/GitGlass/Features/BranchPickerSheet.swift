@@ -77,6 +77,7 @@ struct BranchPickerSheet: View {
             }
             .frame(minHeight: 300, maxHeight: 420)
 
+            if showNewBranch { newBranchRow }
             footer
         }
         .padding(20)
@@ -405,8 +406,7 @@ struct BranchPickerSheet: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Button {
-                dismiss()
-                showNewBranch = true
+                withComfortableAnimation(reduceMotion) { showNewBranch = true }
             } label: {
                 Label("新建分支…", systemImage: "plus")
                     .font(.system(size: 11.5, weight: .medium))
@@ -421,6 +421,49 @@ struct BranchPickerSheet: View {
     }
 
     @State private var showNewBranch = false
+    @State private var newBranchName = ""
+
+    /// 内联新建分支：不再走"先关面板再弹 sheet"（那条链早就断了），
+    /// 直接在面板底部展开一行输入，创建成功后关面板。
+    private var newBranchRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "plus.circle")
+                .font(.system(size: 11))
+                .foregroundStyle(GlassPalette.blue)
+            TextField("新分支名，例如 feature/login", text: $newBranchName)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .onSubmit { createNewBranch() }
+            Button("创建") { createNewBranch() }
+                .buttonStyle(.borderless)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(GlassPalette.blue)
+                .disabled(newBranchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("取消") {
+                withComfortableAnimation(reduceMotion) {
+                    showNewBranch = false
+                    newBranchName = ""
+                }
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 11.5))
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .glassSurface(cornerRadius: 10)
+    }
+
+    private func createNewBranch() {
+        let name = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        Task {
+            await state.createBranch(name)
+            newBranchName = ""
+            showNewBranch = false
+            dismiss()
+        }
+    }
 
     private func emptyHint(_ text: String) -> some View {
         VStack(spacing: 8) {
