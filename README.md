@@ -19,7 +19,7 @@
 | 应用配置 | `Resources/Info.plist` | 产品名「码牛 MooGit」，版本 1.3.0，最低 macOS 26.0 |
 | 品牌资源 | `Resources/LogoSource.jpg` / `AppIcon.icns` / `BrandHeader.png` | 应用图标、Dock 图标与窗口页头图标；从 GitHub 直接 clone 时不带这些二进制，`build-app.sh` 会自动回退到程序化图标，功能不受影响 |
 | 脚本 | `scripts/` | `build-app.sh` 打包应用、`package.sh` 生成分发 zip |
-| 文档 | `README.md`、`docs/` | 本文件 + 完整操作手册（Markdown / HTML） |
+| 文档 | `README.md`、`docs/` | 本文件 + 完整操作手册（应用内 `⌘?` 可读，也有 Markdown / HTML 版） |
 
 ## 2. 系统要求
 
@@ -131,7 +131,7 @@ Sources/
 └── GitGlassSelfTest/         服务层深度自检
 
 .github/                      CI、自动 Release、Issue / PR 模板
-docs/                         Markdown + HTML 操作手册（含 ASCII 文件名副本）
+docs/                         Markdown + HTML 操作手册（HTML 同时是应用内手册的唯一真源）
 scripts/                      打包、图标、发布脚本
 CHANGELOG.md / CONTRIBUTING.md / LICENSE
 ```
@@ -147,9 +147,9 @@ CHANGELOG.md / CONTRIBUTING.md / LICENSE
 
 ## 9. 文档
 
-- `docs/操作手册.md`：完整操作手册（安装迁移、六个页面、搜索语法、遴选、冲突处理、故障排查、快捷键）
-- `docs/操作手册.html`：排版版手册，浏览器打开即可，也可打印为 PDF
-- `docs/UserGuide.md` / `docs/UserGuide.html`：同一份手册的 ASCII 文件名副本，跨系统解压时备用
+- **应用内操作手册**：**帮助 ▸ 码牛 MooGit 操作手册**（`⌘?`），或顶栏书本图标、关于面板、菜单栏常驻菜单、任意教学弹层底部。独立窗口、离线可读，带章节跳转 / 搜索 / 缩放 / 打印。
+- `docs/操作手册.html`：手册唯一真源，打包时复制为 `Contents/Resources/Manual.html` 供应用内窗口加载；也可直接用浏览器打开、打印为 PDF。
+- `docs/操作手册.md`：同一份内容的 Markdown 版（GitHub 上阅读 / 检索）。
 - `CHANGELOG.md`：版本变更记录；`CONTRIBUTING.md`：开发与发布规范；`LICENSE`：MIT
 
 ## 10. 在 GitHub 上维护

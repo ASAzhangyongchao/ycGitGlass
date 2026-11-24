@@ -8,6 +8,14 @@ struct GitGlassApp: App {
 
     init() {
         if SnapshotMode.run() { exit(0) }
+        // 调试入口：`open dist/码牛 MooGit.app --args --manual-window` 直接开手册窗口，
+        // 方便真机核对窗口工具条与 WebView 的布局（不影响正常启动）。
+        if CommandLine.arguments.contains("--manual-window") {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.2))
+                ManualWindowController.shared.show()
+            }
+        }
     }
 
     var body: some Scene {
@@ -24,6 +32,16 @@ struct GitGlassApp: App {
             CommandGroup(replacing: .appInfo) {
                 Button("关于 码牛 MooGit") {
                     state.openAbout()
+                }
+            }
+            // 帮助菜单：用内置手册替换系统默认项，⌘?（⇧⌘/）是 macOS 帮助的惯例键位。
+            CommandGroup(replacing: .help) {
+                Button("码牛 MooGit 操作手册") {
+                    ManualWindowController.shared.show()
+                }
+                .keyboardShortcut("/", modifiers: [.command, .shift])
+                Button("在浏览器中打开手册") {
+                    ManualWindowController.shared.openInBrowser()
                 }
             }
             CommandMenu("Git") {
@@ -90,6 +108,7 @@ struct GitGlassApp: App {
         Button("推送") { Task { await state.push() } }
             .disabled(state.currentRepository == nil)
         Divider()
+        Button("操作手册…") { ManualWindowController.shared.show() }
         Button("关于 / 检查更新") { state.openAbout() }
         Divider()
         Button("退出 码牛") { NSApp.terminate(nil) }

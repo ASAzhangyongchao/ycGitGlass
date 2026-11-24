@@ -126,6 +126,26 @@ struct TeachingTipView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            // 从局部教学跳到完整手册：手册是独立窗口，不抢 popover 的呈现。
+            Divider().padding(.top, 2)
+            Button {
+                ManualWindowController.shared.show()
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "book.closed")
+                    Text("查看完整操作手册")
+                    Spacer(minLength: 0)
+                    Text("⌘?")
+                        .foregroundStyle(.tertiary)
+                    Image(systemName: "arrow.up.right.square")
+                }
+                .font(.system(size: 10.5, weight: .medium))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(GlassPalette.blue)
+            .help("打开内置操作手册窗口")
         }
         .padding(16)
         .frame(width: 300, alignment: .leading)

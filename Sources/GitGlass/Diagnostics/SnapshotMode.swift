@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import WebKit
 import GitCore
 
 /// 调试用：离屏渲染 HistoryView 快照（模拟工作台点击最近提交后的状态）。
@@ -15,6 +16,16 @@ enum SnapshotMode {
         let width: CGFloat = args.count > index + 3 ? CGFloat(Int(args[index + 2]) ?? 1100) : 1100
         let height: CGFloat = args.count > index + 3 ? CGFloat(Int(args[index + 3]) ?? 700) : 700
         let page = args.count > index + 4 ? args[index + 4] : "history"
+
+        // 手册是 WKWebView（独立渲染进程），cacheDisplay 抓不到内容，
+        // 走 WebKit 官方的 takeSnapshot：--snap out.png 1100 760 manual[-dark][@锚点]
+        if page.hasPrefix("manual") {
+            let parts = page.split(separator: "@", maxSplits: 1).map(String.init)
+            let base = parts[0]
+            let anchor = parts.count > 1 ? parts[1] : nil
+            renderManual(to: out, width: width, height: height, dark: base == "manual-dark", anchor: anchor)
+            return true
+        }
 
         let state = AppState()
         let repo = Repository(id: UUID(), name: "GitGlass", path: "/tmp/xx")
@@ -221,6 +232,98 @@ enum SnapshotMode {
             print("saved: \(out)")
         }
         exit(0)
+    }
+
+    // MARK: 手册离屏快照
+    //
+    // WKWebView 在独立渲染进程里合成，`cacheDisplay` 只能拿到空白。
+    // 这里用 WebKit 官方 `takeSnapshot`，顺便验证暗色 CSS 是否真的生效。
+
+    private static func renderManual(to out: String, width: CGFloat, height: CGFloat,
+                                     dark: Bool, anchor: String? = nil) {
+        guard let url = ManualResource.url() else {
+            print("找不到 docs/操作手册.html")
+            exit(1)
+        }
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        webView.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+
+        // 必须挂进真实窗口才会渲染（和玻璃材质那次踩的是同一个坑）。
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = webView
+        window.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+        window.orderFrontRegardless()
+
+        let delegate = ManualSnapDelegate { finishedWebView in
+            // 先让排版 / 字体加载跑完，否则长文档里元素的 offsetTop 还没定，
+            // 滚动会落在错误的位置（本次实测：滚到 shortcuts 只前进了 60px）。
+            RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+            let shoot: () -> Void = {
+                finishedWebView.layoutSubtreeIfNeeded()
+                let config = WKSnapshotConfiguration()
+                config.rect = CGRect(x: 0, y: 0, width: width, height: height)
+                finishedWebView.takeSnapshot(with: config) { image, error in
+                    if let image,
+                       let tiff = image.tiffRepresentation,
+                       let rep = NSBitmapImageRep(data: tiff),
+                       let png = rep.representation(using: NSBitmapImageRep.FileType.png, properties: [:]) {
+                        try? png.write(to: URL(fileURLWithPath: out))
+                        print("saved: \(out) (\(Int(width))x\(Int(height)) dark=\(dark))")
+                        exit(0)
+                    }
+                    print("takeSnapshot 失败：\(String(describing: error))")
+                    exit(1)
+                }
+            }
+            // 手册里 html { scroll-behavior: smooth }，scrollIntoView 会走动画、
+            // 截图时可能还没停稳；先关掉平滑滚动，再用绝对偏移量定位。
+            if let anchor {
+                let safe = anchor.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+                let script = """
+                document.documentElement.style.scrollBehavior = 'auto';
+                var el = document.getElementById('\(safe)');
+                if (el) { window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 12); }
+                """
+                finishedWebView.evaluateJavaScript(script) { _, error in
+                    if let error { print("滚动脚本失败：\(error)") }
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.7))
+                    shoot()
+                }
+            } else {
+                shoot()
+            }
+        }
+        webView.navigationDelegate = delegate
+        ManualSnapDelegate.retained = delegate   // navigationDelegate 是 weak
+        // 带锚点加载：用来验证表格 / 快捷键这些首屏之外的区域
+        let target = anchor.flatMap { URL(string: url.absoluteString + "#" + $0) } ?? url
+        webView.loadFileURL(target, allowingReadAccessTo: url.deletingLastPathComponent())
+
+        RunLoop.current.run(until: Date().addingTimeInterval(12))
+        print("手册快照超时")
+        exit(1)
+    }
+}
+
+@MainActor
+private final class ManualSnapDelegate: NSObject, WKNavigationDelegate {
+    static var retained: ManualSnapDelegate?
+    private let onFinish: (WKWebView) -> Void
+
+    init(onFinish: @escaping (WKWebView) -> Void) {
+        self.onFinish = onFinish
+        super.init()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        onFinish(webView)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        print("手册加载失败：\(error)")
+        exit(1)
     }
 }
 

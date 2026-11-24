@@ -719,6 +719,56 @@ struct GitGlassSelfTest {
             check("更新源指向正式仓库", AppConfig.repoSlug == "ASAzhangyongchao/ycGitGlass"
                   && AppConfig.updateAPIURL.absoluteString.contains("releases/latest"))
             check("版本比较驱动更新判定", UpdateService.compareVersions(AppConfig.appVersion, info.version) < 0)
+
+            // MARK: Q 内置操作手册资源
+            section("Q · 内置操作手册")
+            // 手册靠 scripts/build-app.sh 复制进 bundle，任何一环漏掉都会让
+            // 「帮助 ▸ 操作手册」变成错误页，这里把整条链路的静态契约钉住。
+            let projectRoot = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // GitGlassSelfTest
+                .deletingLastPathComponent()   // Sources
+                .deletingLastPathComponent()   // 项目根
+            let htmlURL = projectRoot.appendingPathComponent("docs/操作手册.html")
+            let mdURL = projectRoot.appendingPathComponent("docs/操作手册.md")
+            let buildURL = projectRoot.appendingPathComponent("scripts/build-app.sh")
+            let windowURL = projectRoot.appendingPathComponent("Sources/GitGlass/Features/ManualWindow.swift")
+
+            let htmlText = (try? String(contentsOf: htmlURL, encoding: .utf8)) ?? ""
+            let mdText = (try? String(contentsOf: mdURL, encoding: .utf8)) ?? ""
+            let buildText = (try? String(contentsOf: buildURL, encoding: .utf8)) ?? ""
+            let windowText = (try? String(contentsOf: windowURL, encoding: .utf8)) ?? ""
+
+            check("内置手册 HTML 存在", !htmlText.isEmpty)
+            check("手册体积充足（> 20KB）", htmlText.utf8.count > 20_000, "\(htmlText.utf8.count) 字节")
+
+            var sectionIDs: [String] = []
+            if let regex = try? NSRegularExpression(pattern: #"<section id="([a-z\-]+)""#) {
+                let ns = htmlText as NSString
+                sectionIDs = regex.matches(in: htmlText, range: NSRange(location: 0, length: ns.length))
+                    .compactMap { match in
+                        Range(match.range(at: 1), in: htmlText).map { String(htmlText[$0]) }
+                    }
+            }
+            check("手册含 13 个章节锚点", sectionIDs.count == 13, "\(sectionIDs.count) 个")
+            check("章节 id 无重复", Set(sectionIDs).count == sectionIDs.count)
+            check("手册含暗色样式", htmlText.contains("@media (prefers-color-scheme: dark)"))
+            check("手册自包含（无外部脚本 / 样式 / 图片）",
+                  !htmlText.contains("<script src=") && !htmlText.contains("<link rel=")
+                  && !htmlText.contains("src=\"http") && !htmlText.contains("url(http"))
+            check("手册写明应用内入口与 ⌘?",
+                  htmlText.contains("应用内操作手册") && htmlText.contains("⌘?")
+                  && htmlText.contains("帮助 ▸ 码牛 MooGit 操作手册"))
+            check("Markdown 版同步了应用内入口",
+                  mdText.contains("应用内操作手册") && mdText.contains("⌘?"))
+            // 窗口顶部的章节跳转常量必须覆盖 HTML 里的全部 section id，否则会出现
+            // 「目录里有、菜单里点不到」的静默漂移。
+            let missingInMenu = sectionIDs.filter { !windowText.contains("\"\($0)\"") }
+            check("章节跳转菜单覆盖全部 section id", missingInMenu.isEmpty,
+                  "缺：\(missingInMenu.joined(separator: ", "))")
+            check("打包脚本把手册复制进 bundle",
+                  buildText.contains("docs/操作手册.html") && buildText.contains("Resources/Manual.html"))
+            check("窗口优先读 bundle 内 Manual.html",
+                  windowText.contains("forResource: bundledName") && windowText.contains("Manual"))
         } catch {
             failed += 1
             print("  ❌ 自检中断：\(error)")

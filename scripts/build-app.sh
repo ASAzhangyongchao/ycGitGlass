@@ -34,6 +34,13 @@ cp -f "$ROOT/Resources/BrandHeader.png" "$APP/Contents/Resources/BrandHeader.png
 if [[ -f "$ROOT/Resources/MenuCowTemplate.png" ]]; then
   cp -f "$ROOT/Resources/MenuCowTemplate.png" "$APP/Contents/Resources/MenuCowTemplate.png"
 fi
+# 操作手册：唯一真源是 docs/操作手册.html，这里只做复制，不维护第二份内容。
+# 应用内「帮助 ▸ 操作手册」窗口用 WKWebView 直接加载这份离线资源。
+if [[ ! -f "$ROOT/docs/操作手册.html" ]]; then
+  echo "    缺少 docs/操作手册.html，应用内手册会打不开" >&2
+  exit 1
+fi
+cp -f "$ROOT/docs/操作手册.html" "$APP/Contents/Resources/Manual.html"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 chmod +x "$APP/Contents/MacOS/GitGlass"
 

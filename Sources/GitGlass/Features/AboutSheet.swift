@@ -42,7 +42,10 @@ struct AboutSheet: View {
             updateCard
                 .padding(.top, 12)
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                linkButton("操作手册", icon: "book.closed") {
+                    ManualWindowController.shared.show()
+                }
                 linkButton("GitHub 仓库", icon: "chevron.left.forwardslash.chevron.right") {
                     state.openRepositoryPage()
                 }

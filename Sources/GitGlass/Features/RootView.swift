@@ -80,6 +80,11 @@ struct RootView: View {
                         state.showRefreshHistoryPopoverNow()
                     }
 
+                    ToolbarIconButton(icon: "book.closed", label: "手册",
+                                      help: "打开操作手册（⌘?）") {
+                        ManualWindowController.shared.show()
+                    }
+
                     ToolbarIconButton(icon: "info.circle", label: "关于",
                                       help: "关于 码牛 MooGit · 版本 · 检查更新") {
                         state.openAbout()
