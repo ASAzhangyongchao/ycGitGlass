@@ -164,7 +164,7 @@
   <div class="meta">
     <div>应用体积约 3.5 MB</div>
     <div>空闲内存约 38 MB</div>
-    <div>自检 208 项通过</div>
+    <div>自检 211 项通过</div>
     <div>已内置于应用 · 离线可读</div>
   </div>
   <div class="note good" style="margin-top:16px">这份手册已内置进应用：<strong>帮助 ▸ 操作手册</strong>（<span class="kbd">⌘?</span>）即可在独立窗口打开，不联网也能看；也可以点各功能区块的小问号，从教学弹层底部跳转到这里。</div>
@@ -503,7 +503,7 @@ CommandRunner (Process, 参数数组 + 临时文件输出 + 超时保护)</code>
   <h3>自检</h3>
   <pre><code>swift run --disable-sandbox GitGlassSelfTest
 # 结果：150 通过，0 失败</code></pre>
-  <p>在临时 Git 仓库与临时 SSH 目录上跑 208 项断言，覆盖状态、暂存、提交、历史搜索、遴选、还原、<strong>冲突检测与选边 / 继续 / 中止</strong>、储藏、标签、提交详情、中文空格路径、远程源、错误映射、持久化、密钥生成与权限、SSH config 幂等与备份、命令超时与并发、模型契约、新建分支四种起点落点、内置手册资源完整性、侧栏低频操作折叠契约；不触碰用户真实 <code>~/.ssh</code>。</p>
+  <p>在临时 Git 仓库与临时 SSH 目录上跑 211 项断言，覆盖状态、暂存、提交、历史搜索、遴选、还原、<strong>冲突检测与选边 / 继续 / 中止</strong>、储藏、标签、提交详情、中文空格路径、远程源、错误映射、持久化、密钥生成与权限、SSH config 幂等与备份、命令超时与并发、模型契约、新建分支四种起点落点、内置手册资源完整性、侧栏低频操作折叠契约、顶部页签留白；不触碰用户真实 <code>~/.ssh</code>。</p>
   <h3>扩展点</h3>
   <ul>
     <li>新增 git 能力：<code>GitService</code> 加方法 → <code>AppState</code> 加 mutate 包装 → 页面加按钮。</li>

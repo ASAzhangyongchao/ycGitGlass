@@ -39,6 +39,9 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(.horizontal, 20)
+            // 页签条别贴住系统标题栏：detail 区从 toolbar 下沿直接起，
+            // 少了这一层会让六格玻璃轨道和上面的仓库/分支胶囊挤成一条。
+            .padding(.top, 16)
             .padding(.bottom, 14)
         }
         .navigationSplitViewStyle(.balanced)

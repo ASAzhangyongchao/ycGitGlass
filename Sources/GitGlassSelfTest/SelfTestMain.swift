@@ -832,6 +832,22 @@ struct GitGlassSelfTest {
             check("手册 HTML 同步折叠说明", htmlText.contains("侧边栏底部的「更多操作」"))
             check("手册 Markdown 同步折叠说明", mdText.contains("低频操作默认折叠"))
             check("README 同步折叠说明", readmeText.contains("更多操作"))
+
+            // MARK: S 顶部页签留白
+            section("S · 顶部页签留白")
+            // 「贴顶上边」反复出现过：把四边内边距钉成静态契约，
+            // 以后重构 detail 容器时漏掉任一方向都会直接报红。
+            let rootURL = projectRoot.appendingPathComponent("Sources/GitGlass/Features/RootView.swift")
+            let changelogURL = projectRoot.appendingPathComponent("CHANGELOG.md")
+            let rootText = (try? String(contentsOf: rootURL, encoding: .utf8)) ?? ""
+            let changelogText = (try? String(contentsOf: changelogURL, encoding: .utf8)) ?? ""
+            check("detail 区四边内边距齐全（左右 20 / 上 16 / 下 14）",
+                  rootText.contains(".padding(.horizontal, 20)")
+                  && rootText.contains(".padding(.top, 16)")
+                  && rootText.contains(".padding(.bottom, 14)"))
+            check("顶部留白写在 detail 层而非内容页内部",
+                  rootText.contains("} detail: {") && rootText.contains("页签条别贴住系统标题栏"))
+            check("CHANGELOG 记录顶部留白修复", changelogText.contains("页签条顶部留白"))
         } catch {
             failed += 1
             print("  ❌ 自检中断：\(error)")
