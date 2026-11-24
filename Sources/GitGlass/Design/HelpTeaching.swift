@@ -244,6 +244,18 @@ enum Teachings {
         footnote: "置顶信息只记在本机（UserDefaults），不写进仓库配置，拷走仓库不受影响。"
     )
 
+    /// 侧栏底部折叠的低频操作
+    static let sidebarMoreActions = TeachingTip(
+        title: "「更多操作」里是什么",
+        intro: "新建仓库和克隆远程仓库都是一次性的入库动作，平时用不到，默认折起来把高度让给仓库列表。",
+        steps: [
+            .init("ellipsis.circle", "展开 / 收起", "点侧栏底部「更多操作」一行即可展开，再点「收起」折回去。展开状态会记住，下次打开应用还是展开的。"),
+            .init("folder.badge.plus", "新建仓库", "选一个本地文件夹，在里面执行 git init，把它变成新仓库并加入侧栏。适合从零开始一个项目。"),
+            .init("arrow.down.circle", "克隆远程仓库", "填远程地址（建议 SSH）和存放位置，git clone 到本地并自动加入侧栏。适合接手已有项目。"),
+        ],
+        footnote: "日常切仓库、提交、看历史都从上面的列表和页签走，用不到这两个；收起后侧栏能多显示约 2 行仓库。"
+    )
+
     /// 远程源页
     static let remotes = TeachingTip(
         title: "远程源是什么",

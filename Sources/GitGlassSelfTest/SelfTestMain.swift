@@ -769,6 +769,69 @@ struct GitGlassSelfTest {
                   buildText.contains("docs/操作手册.html") && buildText.contains("Resources/Manual.html"))
             check("窗口优先读 bundle 内 Manual.html",
                   windowText.contains("forResource: bundledName") && windowText.contains("Manual"))
+
+            // MARK: R 侧栏低频操作折叠
+            section("R · 侧栏低频操作折叠")
+            // 「新建仓库 / 克隆远程仓库」只折叠、不删除；这条静态契约防止
+            // 后续重构把入口弄丢，或把它重新摆回常显区（吃掉仓库列表高度）。
+            let sidebarURL = projectRoot.appendingPathComponent("Sources/GitGlass/Features/SidebarView.swift")
+            let stateURL = projectRoot.appendingPathComponent("Sources/GitCore/Store/AppState.swift")
+            let teachingURL = projectRoot.appendingPathComponent("Sources/GitGlass/Design/HelpTeaching.swift")
+            let snapshotURL = projectRoot.appendingPathComponent("Sources/GitGlass/Diagnostics/SnapshotMode.swift")
+            let readmeURL = projectRoot.appendingPathComponent("README.md")
+            let sidebarText = (try? String(contentsOf: sidebarURL, encoding: .utf8)) ?? ""
+            let stateText = (try? String(contentsOf: stateURL, encoding: .utf8)) ?? ""
+            let teachingText = (try? String(contentsOf: teachingURL, encoding: .utf8)) ?? ""
+            let snapshotText = (try? String(contentsOf: snapshotURL, encoding: .utf8)) ?? ""
+            let readmeText = (try? String(contentsOf: readmeURL, encoding: .utf8)) ?? ""
+
+            check("折叠相关源码四份都可读",
+                  !sidebarText.isEmpty && !stateText.isEmpty
+                  && !teachingText.isEmpty && !snapshotText.isEmpty)
+            check("两个低频入口仍保留（只折叠、没被删）",
+                  sidebarText.contains("sidebarButton(\"新建仓库\"")
+                  && sidebarText.contains("sidebarButton(\"克隆远程仓库\""))
+            check("两个高频入口常显",
+                  sidebarText.contains("sidebarButton(\"添加仓库…\"")
+                  && sidebarText.contains("sidebarButton(\"扫描文件夹批量导入\""))
+            check("低频入口由 sidebarMoreActionsExpanded 条件包裹",
+                  sidebarText.contains("if state.sidebarMoreActionsExpanded {"))
+            check("折叠行标明「更多操作 / 新建 · 克隆」",
+                  sidebarText.contains("更多操作") && sidebarText.contains("新建 · 克隆"))
+            check("折叠省下的高度归列表（无弹性 Spacer 争高度）",
+                  sidebarText.contains("Color.clear.frame(height: 8)")
+                  && sidebarText.contains(".layoutPriority(1)")
+                  && !sidebarText.contains("Spacer(minLength: 12)"))
+            check("折叠区挂了小问号教学",
+                  sidebarText.contains("Teachings.sidebarMoreActions")
+                  && teachingText.contains("static let sidebarMoreActions"))
+            check("AppState 有展开状态、持久化 key 与显式写入方法",
+                  stateText.contains("sidebarMoreActionsExpanded")
+                  && stateText.contains("sidebar.moreActionsExpanded")
+                  && stateText.contains("setSidebarMoreActionsExpanded"))
+            check("启动时从本机偏好恢复展开状态",
+                  stateText.contains("sidebarMoreActionsExpanded = UserDefaults.standard.bool"))
+            check("离屏快照覆盖收起 / 展开两态",
+                  snapshotText.contains("case \"sidebar\", \"sidebar-more\""))
+
+            // 真实行为：折叠偏好必须双向持久化，且默认值是收起。
+            let moreKey = "sidebar.moreActionsExpanded"
+            let savedMore = UserDefaults.standard.object(forKey: moreKey)
+            UserDefaults.standard.removeObject(forKey: moreKey)
+            let moreState = AppState()
+            check("新状态默认收起", !moreState.sidebarMoreActionsExpanded)
+            moreState.setSidebarMoreActionsExpanded(true)
+            check("展开后写入本机偏好",
+                  moreState.sidebarMoreActionsExpanded && UserDefaults.standard.bool(forKey: moreKey))
+            moreState.setSidebarMoreActionsExpanded(false)
+            check("收起后写回本机偏好",
+                  !moreState.sidebarMoreActionsExpanded && !UserDefaults.standard.bool(forKey: moreKey))
+            if let savedMore { UserDefaults.standard.set(savedMore, forKey: moreKey) }
+            else { UserDefaults.standard.removeObject(forKey: moreKey) }
+
+            check("手册 HTML 同步折叠说明", htmlText.contains("侧边栏底部的「更多操作」"))
+            check("手册 Markdown 同步折叠说明", mdText.contains("低频操作默认折叠"))
+            check("README 同步折叠说明", readmeText.contains("更多操作"))
         } catch {
             failed += 1
             print("  ❌ 自检中断：\(error)")

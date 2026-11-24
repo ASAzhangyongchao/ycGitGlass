@@ -27,9 +27,12 @@ struct SidebarView: View {
                     .padding(.bottom, 10)
             }
             repositoryList
+                .layoutPriority(1)   // 剩余高度优先给仓库列表：折叠低频操作省下的空间不该被 Spacer 吞掉
             Divider().padding(.vertical, 10)
             actionButtons
-            Spacer(minLength: 12)
+            // 固定 8pt 间隔而不是 Spacer：VStack 里再放一个 flexible 子视图会
+            // 跟仓库列表平分剩余高度，折叠低频操作省下的空间就被白白吃掉。
+            Color.clear.frame(height: 8)
             // 吉祥物：空闲时慢悠悠起伏，有任务时加速打字
             MascotCow(isBusy: state.isBusy)
                 .frame(maxWidth: .infinity)
@@ -330,6 +333,7 @@ struct SidebarView: View {
 
     private var actionButtons: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // 高频：日常添加 / 批量导入，永远常显
             sidebarButton("添加仓库…", icon: "plus.circle.fill", prominent: true) {
                 if let path = chooseFolder(message: "选择一个本地 Git 仓库文件夹") {
                     Task { await state.addRepository(at: path) }
@@ -340,13 +344,64 @@ struct SidebarView: View {
                     Task { await state.scanFolder(path) }
                 }
             }
-            sidebarButton("新建仓库", icon: "folder.badge.plus") {
-                if let path = chooseFolder(message: "选择要初始化为 Git 仓库的文件夹", canCreate: true) {
-                    Task { await state.createRepository(at: path) }
+            // 低频：一次性入库动作，默认折进「更多操作」，把高度让给仓库列表
+            moreActionsSection
+        }
+    }
+
+    /// 「新建仓库 / 克隆远程仓库」只在第一次接入项目时用得到。
+    /// 默认收起，展开状态记在本机偏好（AppState），关掉应用再开仍保持。
+    private var moreActionsSection: some View {
+        VStack(alignment: .leading, spacing: state.sidebarMoreActionsExpanded ? 8 : 0) {
+            HStack(spacing: 2) {
+                Button {
+                    let next = !state.sidebarMoreActionsExpanded
+                    withComfortableAnimation(reduceMotion) {
+                        state.setSidebarMoreActionsExpanded(next)
+                    }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 11.5))
+                        Text("更多操作")
+                            .font(.system(size: 11.5, weight: .medium))
+                        Spacer(minLength: 0)
+                        Text(state.sidebarMoreActionsExpanded ? "收起" : "新建 · 克隆")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                        Image(systemName: state.sidebarMoreActionsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8.5, weight: .bold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("展开后可新建仓库 / 克隆远程仓库（低频操作，默认收起）")
+
+                HelpQuestionButton(tip: Teachings.sidebarMoreActions, arrowEdge: .trailing)
+                    .padding(.trailing, 8)
             }
-            sidebarButton("克隆远程仓库", icon: "arrow.down.circle") {
-                showCloneSheet = true
+            .background(
+                Color.primary.opacity(0.035),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+
+            if state.sidebarMoreActionsExpanded {
+                Group {
+                    sidebarButton("新建仓库", icon: "folder.badge.plus") {
+                        if let path = chooseFolder(message: "选择要初始化为 Git 仓库的文件夹", canCreate: true) {
+                            Task { await state.createRepository(at: path) }
+                        }
+                    }
+                    sidebarButton("克隆远程仓库", icon: "arrow.down.circle") {
+                        showCloneSheet = true
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

@@ -16,6 +16,9 @@ public final class AppState {
     /// 侧栏「常用」仓库的 id（按置顶顺序）。只存 id、走 UserDefaults，
     /// 不改 RepositoryStore 的仓库文件结构，老数据零迁移。
     public var pinnedRepoIDs: [UUID] = []
+    /// 侧栏底部「更多操作」（新建仓库 / 克隆远程仓库）是否展开。
+    /// 这两个是一次性入库动作，默认收起把高度让给仓库列表；展开状态记本机偏好。
+    public var sidebarMoreActionsExpanded = false
     public var selectedRepoID: UUID?
     public var platforms: [GitPlatform] = AppConfig.defaultPlatforms
     public var keyPlatformBindings: [String: String] = [:]
@@ -189,6 +192,7 @@ public final class AppState {
         let persisted = store.load()
         repositories = persisted.repositories
         pinnedRepoIDs = Self.loadPinnedIDs()
+        sidebarMoreActionsExpanded = UserDefaults.standard.bool(forKey: Self.moreActionsStorageKey)
         platforms = persisted.platforms.isEmpty ? AppConfig.defaultPlatforms : persisted.platforms
         keyPlatformBindings = persisted.keyPlatformBindings
         onboardingSeen = persisted.onboardingSeen
@@ -333,9 +337,17 @@ public final class AppState {
     }
 
     // MARK: - 仓库维护
-    // MARK: - 常用（置顶）
+    // MARK: - 侧栏偏好持久化
 
     private static let pinnedStorageKey = "sidebar.pinnedRepoIDs"
+    private static let moreActionsStorageKey = "sidebar.moreActionsExpanded"
+
+    /// 展开 / 收起侧栏低频操作区。显式方法而不是 didSet：
+    /// @Observable 的属性观察语义在 Swift 6 下不稳定，写入点收敛在这里更好测。
+    public func setSidebarMoreActionsExpanded(_ expanded: Bool) {
+        sidebarMoreActionsExpanded = expanded
+        UserDefaults.standard.set(expanded, forKey: Self.moreActionsStorageKey)
+    }
 
     private static func loadPinnedIDs() -> [UUID] {
         (UserDefaults.standard.stringArray(forKey: Self.pinnedStorageKey) ?? [])

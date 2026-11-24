@@ -91,6 +91,24 @@ enum SnapshotMode {
             case "commit": return AnyView(CommitView().environment(state))
             case "diff": return AnyView(HistoryView().environment(state))
             case "root": return AnyView(RootView().environment(state))
+            case "sidebar", "sidebar-more":
+                // 造一份多仓库数据，让侧栏呈现真实密度：搜索框 + 常用分组 + 自动折叠。
+                // 两态对比用来验证「低频操作折叠」确实把高度还给了仓库列表。
+                let names = ["GitGlass", "web-bi", "php-jdt-os", "A-doc-oms-java",
+                             "L-sybg-html", "docs-site", "sandbox", "old-blog"]
+                var repos: [Repository] = []
+                for name in names {
+                    repos.append(Repository(id: UUID(), name: name, path: "/Users/demo/\(name)"))
+                }
+                state.repositories = repos
+                state.selectedRepoID = repos[0].id
+                state.pinnedRepoIDs = Array(repos.prefix(2).map(\.id))
+                state.sidebarMoreActionsExpanded = (page == "sidebar-more")
+                return AnyView(
+                    SidebarView()
+                        .environment(state)
+                        .frame(width: 220, height: height)
+                )
             case "commitdiff":
                 // 复现提交页沉浸式 diff：模拟 loadDiff 完成后的状态
                 state.diffFilePath = "Sources/App.swift"

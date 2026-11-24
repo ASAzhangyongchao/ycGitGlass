@@ -37,7 +37,7 @@ public enum AppError: Error, LocalizedError, Equatable, Sendable {
         case .gitNotFound:
             return "安装 Xcode 命令行工具（xcode-select --install），或设置环境变量 GITGLASS_GIT 指向 git。"
         case .notARepository:
-            return "在侧边栏移除它，重新添加一个包含 .git 目录的文件夹；也可以用「新建仓库」初始化。"
+            return "在侧边栏移除它，重新添加一个包含 .git 目录的文件夹；也可以展开侧栏底部「更多操作」→「新建仓库」初始化。"
         case .commandFailed(_, _, let message):
             return Self.translateSuggestion(message)
         case .timeout:
