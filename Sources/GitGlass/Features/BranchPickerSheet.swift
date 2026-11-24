@@ -219,6 +219,7 @@ struct BranchPickerSheet: View {
                     ForEach(group.branches) { branch in
                         branchRow(
                             name: String(branch.name.split(separator: "/", maxSplits: 1).dropFirst().joined()),
+                            startRef: branch.name,
                             subtitle: branch.upstream.isEmpty ? nil : "跟踪 \(branch.upstream)",
                             isCurrent: branch.isCurrent,
                             tint: GlassPalette.violet
@@ -261,7 +262,10 @@ struct BranchPickerSheet: View {
         }
     }
 
-    private func branchRow(name: String, subtitle: String?, isCurrent: Bool, tint: Color,
+    /// `startRef` 是完整 ref（远程分支行显示名裁掉了 `origin/` 前缀，
+    /// 但作为新建分支起点必须用 `origin/main` 这种完整名字）。
+    private func branchRow(name: String, startRef: String? = nil, subtitle: String?,
+                           isCurrent: Bool, tint: Color,
                            action: @escaping () -> Void) -> some View {
         HStack(spacing: 9) {
             Button(action: action) {
@@ -301,6 +305,21 @@ struct BranchPickerSheet: View {
             Color.primary.opacity(0.035),
             in: RoundedRectangle(cornerRadius: 8, style: .continuous)
         )
+        .contextMenu {
+            Button("切换到此分支") { action() }
+            Divider()
+            Button("以此分支为起点新建分支…") {
+                // 先关掉选择器，等 sheet 收起动画走完再发信号：
+                // 同一个 window-modal presenter 上直接换 item 有概率不生效，
+                // 历史上这里就出过「点了没反应」。
+                let ref = startRef ?? name
+                dismiss()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(220))
+                    state.requestNewBranch(from: ref)
+                }
+            }
+        }
     }
 
     /// 每行右侧的合并菜单：合入当前 / 合并过去 / 删除分支
@@ -422,7 +441,7 @@ struct BranchPickerSheet: View {
             .overlay { Capsule().strokeBorder(GlassPalette.blue.opacity(0.28), lineWidth: 0.8) }
             .help("从当前分支切出新分支；也可用菜单 Git ▸ 新建分支… 打开独立弹窗")
             Spacer()
-            Text("提示：切远程分支会自动建立本地跟踪")
+            Text("提示：切远程分支自动建立跟踪 · 行上右键可以此分支为起点新建")
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
         }

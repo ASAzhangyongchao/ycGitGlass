@@ -730,7 +730,8 @@ public struct GitService: Sendable {
     }
 
     /// 起点（commit hash / 分支名）只允许安全字符，避免拼进 argv 的参数被当成选项。
-    private static func isValidRefToken(_ value: String) -> Bool {
+    /// public 是为了让表现层的前置提示与自检复用同一套规则，避免两处白名单漂移。
+    public static func isValidRefToken(_ value: String) -> Bool {
         guard !value.isEmpty, value.count <= 128, !value.hasPrefix("-") else { return false }
         return value.allSatisfy { $0.isLetter || $0.isNumber || "_.-/".contains($0) }
     }

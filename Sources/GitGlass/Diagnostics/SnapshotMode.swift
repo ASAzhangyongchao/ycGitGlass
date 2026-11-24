@@ -106,19 +106,41 @@ enum SnapshotMode {
                         .padding(16)
                         .background(GlassBackground())
                 )
-            case "newbranch", "newbranch-error", "newbranch-invalid", "newbranch-from":
-                // 新建分支弹窗的三种状态：空 / 重名报错 / 非法字符报错（+ 基于提交）
+            case "newbranch", "newbranch-error", "newbranch-invalid", "newbranch-from",
+                 "newbranch-start", "newbranch-custom":
+                // 新建分支弹窗各态：空 / 重名报错 / 非法字符报错 /
+                // 基于提交 / 基于远程分支 / 自定义起点非法字符
                 let initial: String
                 switch page {
                 case "newbranch-error": initial = "main"
                 case "newbranch-invalid": initial = "feature/bad name"
+                case "newbranch-start": initial = "feature/pay"
+                case "newbranch-custom": initial = "feature/custom"
                 default: initial = ""
                 }
-                let start = page == "newbranch-from" ? "a1b2c3d4e5f6a7b8c9d0" : nil
+                let start: String?
+                switch page {
+                case "newbranch-from": start = "a1b2c3d4e5f6a7b8c9d0"
+                case "newbranch-start": start = "origin/main"
+                case "newbranch-custom": start = "HEAD~2"
+                default: start = nil
+                }
                 return AnyView(
                     NewBranchSheet(startPoint: start, initialName: initial)
                         .environment(state)
                         .padding(20)
+                        .background(GlassBackground())
+                )
+            case "startpicker":
+                // 起点下拉列表：验证分组标题、选中态与 checkmark
+                return AnyView(
+                    StartPointList(locals: state.localBranches,
+                                   remotes: state.remoteBranches,
+                                   commits: state.commits,
+                                   currentBranch: "main",
+                                   selection: .branch("origin/main"),
+                                   onSelect: { _ in })
+                        .padding(12)
                         .background(GlassBackground())
                 )
             case "hunkonly":

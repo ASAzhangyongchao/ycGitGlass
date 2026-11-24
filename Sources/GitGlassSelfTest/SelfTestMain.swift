@@ -99,6 +99,76 @@ struct GitGlassSelfTest {
             let rootHash = try await git.log(at: repo.path, query: "初始化").first?.hash ?? ""
             check("取到首条提交完整 hash", rootHash.count >= 7)
 
+            // MARK: A2 新建分支起点 startPoint
+            // 独立仓库：避免新建/切换分支影响后面 B 段对「当前分支」的假设。
+            section("A2 · 新建分支起点 startPoint")
+            let spRepo = root.appendingPathComponent("startpoint")
+            try fm.createDirectory(at: spRepo, withIntermediateDirectories: true)
+            _ = try await git.initializeRepository(at: spRepo.path)
+            _ = try await runner.run(executable: AppConfig.gitExecutable,
+                                     arguments: ["-C", spRepo.path, "remote", "add", "origin",
+                                                 "https://example.com/demo.git"])
+            _ = try await runner.run(executable: AppConfig.gitExecutable,
+                                     arguments: ["-C", spRepo.path, "config", "user.name", "GitGlass SelfTest"])
+            _ = try await runner.run(executable: AppConfig.gitExecutable,
+                                     arguments: ["-C", spRepo.path, "config", "user.email", "selftest@gitglass.local"])
+            try "v1\n".write(to: spRepo.appendingPathComponent("file.txt"), atomically: true, encoding: .utf8)
+            try await git.stageAll(at: spRepo.path)
+            _ = try await git.commit(message: "v1", at: spRepo.path)
+            try "v2\n".write(to: spRepo.appendingPathComponent("file.txt"), atomically: true, encoding: .utf8)
+            try await git.stageAll(at: spRepo.path)
+            _ = try await git.commit(message: "v2", at: spRepo.path)
+            let spLog = try await git.log(at: spRepo.path)
+            let spFirst = spLog.last?.hash ?? ""
+            let spTip = spLog.first?.hash ?? ""
+            check("起点测试仓库有两条不同提交", spLog.count == 2 && spFirst != spTip)
+
+            func headHash(_ path: String) async throws -> String {
+                try await runner.run(executable: AppConfig.gitExecutable,
+                                     arguments: ["-C", path, "rev-parse", "HEAD"]).stdout
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            // 造一个「落后于当前 HEAD」的远程跟踪分支，作为可区分的起点
+            _ = try await runner.run(executable: AppConfig.gitExecutable,
+                                     arguments: ["-C", spRepo.path, "update-ref",
+                                                 "refs/remotes/origin/main", spFirst])
+
+            try await git.createBranch("from-head", at: spRepo.path)
+            check("起点为空 → 基于当前 HEAD", try await headHash(spRepo.path) == spTip)
+
+            try await git.createBranch("from-remote", from: "origin/main", at: spRepo.path)
+            check("远程分支起点 → HEAD 落在该远程分支", try await headHash(spRepo.path) == spFirst)
+            let trackRemote = try await runner.run(
+                executable: AppConfig.gitExecutable,
+                arguments: ["-C", spRepo.path, "config", "--get", "branch.from-remote.remote"]
+            ).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            check("远程分支起点自动建立跟踪", trackRemote == "origin")
+
+            try await git.createBranch("from-hash", from: spFirst, at: spRepo.path)
+            check("提交号起点 → HEAD 落在该提交", try await headHash(spRepo.path) == spFirst)
+
+            _ = try await runner.run(executable: AppConfig.gitExecutable,
+                                     arguments: ["-C", spRepo.path, "branch", "legacy", spFirst])
+            try await git.createBranch("from-local", from: "legacy", at: spRepo.path)
+            check("本地分支起点 → HEAD 落在该分支", try await headHash(spRepo.path) == spFirst)
+
+            check("起点白名单放行远程分支名", GitService.isValidRefToken("origin/main"))
+            check("起点白名单放行提交号", GitService.isValidRefToken(spFirst))
+            check("起点白名单拒绝 ~ 相对引用", !GitService.isValidRefToken("HEAD~2"))
+            check("起点白名单拒绝选项注入", !GitService.isValidRefToken("--upload-pack=evil"))
+            var rejectedStart = false
+            do {
+                try await git.createBranch("should-not-exist", from: "HEAD~2", at: spRepo.path)
+            } catch {
+                rejectedStart = true
+            }
+            let branchesAfterReject = (try? await git.branches(at: spRepo.path)) ?? []
+            check("非法起点在落命令前被拒绝", rejectedStart
+                  && !branchesAfterReject.contains { $0.name == "should-not-exist" })
+            // A2 的仓库不能被 G 段「扫描文件夹发现仓库」算进去（那里期望 root 下只有 demo）
+            try? fm.removeItem(at: spRepo)
+
             // MARK: B 遴选 / 还原
             section("B · 遴选 Cherry-pick / 还原 Revert")
             let branchesBefore = try await git.branches(at: repo.path)
